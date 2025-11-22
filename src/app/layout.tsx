@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,6 +21,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ChessPaa",
   description: "Your own Chess Grandfather who will help you become next grandmaster",
+  icons: {
+    icon: '/logo1.png',
+  },
 };
 
 export default function RootLayout({
