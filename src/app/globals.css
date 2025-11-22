@@ -8,6 +8,8 @@
   --color-chess-sky: #e0f2fe;
   --color-chess-sand: #f5f5f4;
   --color-chess-text: #1f2937;
+  --color-chess-blue: #25A9B4;
+
   
   /* Shadows */
   --shadow-floating: 0 18px 45px rgba(15, 23, 42, 0.15);
@@ -26,6 +28,7 @@ html {
   --chess-teal: #0f766e;
   --chess-red: #ef4444;
   --chess-yellow: #facc15;
+  --chess-blue: #25A9B4;
   --chess-sky: #e0f2fe;
   --chess-sand: #f5f5f4;
   --chess-text: #1f2937;
@@ -33,6 +36,9 @@ html {
   /* Shadows */
   --shadow-floating: 0 18px 45px rgba(15, 23, 42, 0.15);
   --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.08);
+
+  /* Chess piece cursor - Pawn optimized for cursor use (32x32) */
+  --cursor-pawn: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 76 76' width='32' height='32'%3E%3Cpath fill='%23000' d='M24.94 60.17c0-7.14 6.73-6.33 7.51-17.42h-2.36v-1.58h3.56c.73-3.2 1.59-7.29 1.59-12.67h-5.94l5.39-2.69c-1.35-1.01-2.23-2.62-2.23-4.44 0-3.06 2.48-5.54 5.54-5.54s5.54 2.48 5.54 5.54c0 1.82-.87 3.43-2.23 4.44l5.39 2.69h-5.94c0 5.37.82 9.47 1.5 12.67h3.65v1.58h-2.49c.9 11.08 7.63 10.28 7.63 17.42H24.94z'/%3E%3C/svg%3E") 16 16, pointer;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -52,6 +58,7 @@ body {
 .bg-chess-red { background-color: var(--chess-red); }
 .bg-chess-yellow { background-color: var(--chess-yellow); }
 .bg-chess-sky { background-color: var(--chess-sky); }
+.bg-chess-blue { background-color: var(--chess-blue); }
 .bg-chess-sand { background-color: var(--chess-sand); }
 
 .text-chess-text { color: var(--chess-text); }
@@ -64,4 +71,25 @@ body {
 
 .shadow-card {
   box-shadow: var(--shadow-card);
+}
+
+/* Custom cursor class for pawn */
+.cursor-pawn {
+  cursor: var(--cursor-pawn);
+}
+
+/* Apply pawn cursor to all buttons and interactive elements */
+button,
+a[href],
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+button:hover,
+a[href]:hover,
+[role="button"]:hover,
+button:active,
+a[href]:active,
+[role="button"]:active {
+  cursor: var(--cursor-pawn) !important;
 }
