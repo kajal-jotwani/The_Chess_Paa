@@ -1,4 +1,4 @@
-import { LoginForm } from "@/shadcn-components/login-form"
+import { LoginForm } from "@/app/(auth)/sign-in/login-form"
 import Image from "next/image"
 
 export default function LoginPage() {

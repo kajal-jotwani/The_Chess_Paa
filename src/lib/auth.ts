@@ -9,4 +9,15 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      redirectURI: `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}/api/auth/callback/google`,
+    }
+  },
+
+  // Ensure proper URL configuration
+  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
+  basePath: '/api/auth',
 })

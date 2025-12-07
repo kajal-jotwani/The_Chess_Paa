@@ -1,4 +1,4 @@
-import { SignupForm } from "@/shadcn-components/signup-form"
+  import { SignupForm } from "@/app/(auth)/sign-up/signup-form"
 import Image from "next/image"
 
 export default function LoginPage() {
@@ -13,6 +13,7 @@ export default function LoginPage() {
           className="object-cover"
           quality={100}
           priority
+          unoptimized
         />
       </div>
 
