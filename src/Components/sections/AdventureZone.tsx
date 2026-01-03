@@ -89,10 +89,10 @@ export default function AdventureZones() {
   return (
     <section
       id="adventure-zones"
-      className="relative w-full bg-chess-sand/70 py-16 md:py-24"
+      className="relative w-full bg-chess-blue/70 py-16 md:py-24"
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 md:px-6">
-        {/* Heading */}
+
         <header className="text-center">
           <p className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-chess-teal shadow-card">
             <span className="text-base">🚂</span>
@@ -106,11 +106,10 @@ export default function AdventureZones() {
           </p>
         </header>
 
-        {/* Zone cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {ZONES.map((zone) => (
             <Card key={zone.id} className="group relative">
-              {/* Accent bar */}
+
               <div
                 className={`absolute inset-x-4 -top-3 h-2 rounded-full ${zone.accent} blur-[1px]`}
               />
@@ -142,7 +141,6 @@ export default function AdventureZones() {
           ))}
         </div>
 
-        {/* Lesson of the Day card */}
         {currentLesson && (
           <Card className="mt-4 border border-dashed border-chess-sand bg-white/90 md:flex md:items-center md:gap-6">
             <div className="mb-4 flex items-center gap-3 md:mb-0">
