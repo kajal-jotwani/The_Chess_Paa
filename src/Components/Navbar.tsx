@@ -29,10 +29,9 @@ const Navbar: React.FC = () => {
   }, [pathname]);
 
   const navLinks = [
-    { name: 'Home', path: '/' },
-    { name: 'Know Your Pieces', path: '/#pieces' },
-    { name: 'Adventure Zones', path: '/#zones' },
-    { name: 'Parents Corner', path: '/#parents' },
+    { name: 'The Park', path: '/' },
+    { name: 'Meet the Pieces', path: '/pieces' },
+    { name: 'Rides', path: '/#adventure-zones' },
   ];
 
   // Smooth scroll handler for hash links
@@ -103,9 +102,11 @@ const Navbar: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-4 ml-4">
-                <Button size="sm" variant="primary" className="bg-chess-red shadow-chess-red/20 hover:shadow-chess-red/40">
-                  Play Now
-                </Button>
+                <Link href="/play">
+                  <Button size="sm" variant="primary" className="bg-chess-red shadow-chess-red/20 hover:shadow-chess-red/40">
+                    Play Now
+                  </Button>
+                </Link>
 
                 {/* Profile Avatar */}
                 <div className="relative">
@@ -172,7 +173,9 @@ const Navbar: React.FC = () => {
           <Link href="/profile" className="block px-4 py-3 rounded-xl font-semibold text-base text-chess-text hover:bg-chess-sky">
             My Profile
           </Link>
-          <Button className="w-full bg-chess-red">Play Now</Button>
+          <Link href="/play">
+            <Button className="w-full bg-chess-red">Play Now</Button>
+          </Link>
         </div>
       )}
     </nav>

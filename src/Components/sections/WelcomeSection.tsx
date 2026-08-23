@@ -39,7 +39,7 @@ const WelcomeSection: React.FC = () => {
               </div>
 
               <div className="mt-6 flex justify-center lg:justify-middle">
-                <Link href="/#pieces">
+                <Link href="/pieces">
                   <Button 
                     size="md"
                     variant="primary"
