@@ -24,10 +24,7 @@ import { SkyDome, CelClouds, Atmosphere } from "./Sky";
 import { buildPathGeometry, buildSignpostGeometry, signposts } from "./paths";
 import Landmarks from "./Landmarks";
 import ParkLife from "./ParkLife";
-import Hotspots from "./Hotspots";
 import Gate from "./Gate";
-import ChessPaa from "../characters/ChessPaa";
-import Grandchildren from "../characters/Grandchildren";
 import { NO_INK_LAYER } from "../core/postfx/effects";
 
 /**
@@ -331,28 +328,6 @@ export function Park({ dusk = 0 }: { dusk?: number }) {
       {/* The park is never still: piece-folk on the paths, crows in the pines,
           breath in the cold, snow-glitter drifting over the ice. */}
       <ParkLife dusk={dusk} quality="high" />
-
-      {/* ChessPaa waiting at the gate, lantern swinging. He is the warmest
-          point on screen, so the eye always finds him. */}
-      <ChessPaa
-        position={[6.2, terrainHeight(6.2, 60), 60]}
-        rotation={[0, -2.05, 0]}
-        mood="idle"
-        // A decay-2 point light at 14 sitting ~0.3m off his own coat resolves to
-        // ~150 units of irradiance on him: he blew out to a flat green blob and
-        // the snow under him went pure white. He should GLOW, not incinerate.
-        lanternIntensity={3.2}
-      />
-
-      {/* Two small riders waiting by the car, ready to lean into the first drop. */}
-      <Grandchildren
-        position={[3.1, terrainHeight(3.1, 62.4), 62.4]}
-        rotation={[0, -2.2, 0]}
-        reaction="idle"
-      />
-
-      {/* Every attraction is a door a child can tap. */}
-      <Hotspots />
 
       <Atmosphere />
     </group>

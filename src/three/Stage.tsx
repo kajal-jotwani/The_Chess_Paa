@@ -10,6 +10,9 @@ import { PALETTE } from "./core/palette";
 import { buildWarmLUT } from "./core/toonRamp";
 import { SobelInkEffect, WarmLUTEffect, createNormalDepthMaterial, NO_INK_LAYER } from "./core/postfx/effects";
 import { installParkBridge, markParkReady, RIGS, type RigName, type CameraPose } from "./harnessBridge";
+import Game from "./game/Game";
+import GameHud from "./game/GameHud";
+import { director } from "./game/gameState";
 
 /**
  * THE STAGE — Canvas, cameras, and the post chain.
@@ -215,10 +218,10 @@ function SceneRoot({
   return (
     <>
       <FrameCounters />
-      <CameraRig state={rigState} />
       <NormalDepthPrepass rt={rt} />
       <AdaptiveQuality onFps={onFps} onSample={onSample} />
       <Park dusk={dusk} />
+      <Game />
       <PostChain rt={rt} />
     </>
   );
@@ -243,14 +246,30 @@ export default function Stage({ initialRig = "gate" as RigName }) {
     sceneRef.current = scene;
     // The bridge lets the screenshot harness pose cameras deterministically.
     installParkBridge({
-      setRig: (r) => { rigState.current = { pose: RIGS[r], instant: true }; force((n) => n + 1); },
-      setCamera: (p) => { rigState.current = { pose: p, instant: true }; },
+      setRig: (r) => {
+        const p = RIGS[r];
+        director.setCine({ position: p.position, target: p.target, fov: p.fov });
+        force((n) => n + 1);
+      },
+      setCamera: (p) => { director.setCine({ position: p.position, target: p.target, fov: p.fov }); },
       setDusk: (d) => { duskRef.current = d; },
       getRenderer: () => glRef.current,
       getFps: () => fpsRef.current,
       getScene: () => sceneRef.current,
       getSample: () => sampleRef.current,
     });
+    // QA/harness hooks for the game itself — poseable, deterministic.
+    if (typeof window !== "undefined" && window.__park) {
+      Object.assign(window.__park as unknown as Record<string, unknown>, {
+        gameMode: () => director.mode,
+        ride: () => { director.setCine(null); director.startRide(); },
+        keepRiding: () => director.keepRiding(),
+        hopOff: () => director.hopOff(),
+        atStation: () => director.atStation?.stop ?? null,
+        walkTo: (x: number, z: number) => { director.playerPos.set(x, 0, z); },
+        rideTo: (t: number) => { director.jumpRide(t); },
+      });
+    }
     // Give the first frames a moment to compile shaders before we announce.
     setTimeout(() => markParkReady(), 350);
   }, []);
@@ -287,6 +306,7 @@ export default function Stage({ initialRig = "gate" as RigName }) {
           onReady={handleReady}
         />
       </Canvas>
+      <GameHud />
     </div>
   );
 }
