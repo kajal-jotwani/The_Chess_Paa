@@ -24,6 +24,7 @@ import { SkyDome, CelClouds, Atmosphere } from "./Sky";
 import { buildPathGeometry, buildSignpostGeometry, signposts } from "./paths";
 import Landmarks from "./Landmarks";
 import ParkLife from "./ParkLife";
+import Hotspots from "./Hotspots";
 import Gate from "./Gate";
 import ChessPaa from "../characters/ChessPaa";
 import Grandchildren from "../characters/Grandchildren";
@@ -349,6 +350,9 @@ export function Park({ dusk = 0 }: { dusk?: number }) {
         rotation={[0, -2.2, 0]}
         reaction="idle"
       />
+
+      {/* Every attraction is a door a child can tap. */}
+      <Hotspots />
 
       <Atmosphere />
     </group>
