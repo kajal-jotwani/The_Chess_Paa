@@ -74,7 +74,8 @@ html {
 }
 
 body {
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  /* Self-contained: no webfont fetch, so the park stays offline-capable. */
+  font-family: var(--font-body);
 }
 
 .bg-chess-teal { background-color: var(--chess-teal); }
@@ -204,6 +205,10 @@ a[href]:active,
 
 :root {
   --font-park: "Baloo 2", "Chalkboard SE", "Comic Sans MS", "Comic Neue", "Marker Felt", sans-serif;
+
+  /* Body stack — device faces only, never fetched, so the park works offline. */
+  --font-body: ui-rounded, "SF Pro Rounded", "Nunito", "Quicksand", -apple-system,
+               BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
 }
 
 .font-park { font-family: var(--font-park); }
