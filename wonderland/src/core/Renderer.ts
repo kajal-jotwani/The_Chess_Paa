@@ -1,0 +1,121 @@
+import * as THREE from "three";
+import { EffectComposer, RenderPass, EffectPass, BloomEffect, SMAAEffect, VignetteEffect, BlendFunction, KernelSize, SMAAPreset } from "postprocessing";
+import { N8AOPostPass } from "n8ao";
+
+export type Quality = "low" | "medium" | "high";
+
+/**
+ * WebGL renderer + post-processing stack with three quality tiers so the park
+ * stays smooth on a laptop.  The adaptive governor drops a tier when the frame
+ * rate sags for a few seconds.
+ */
+export class Renderer {
+  readonly renderer: THREE.WebGLRenderer;
+  readonly scene = new THREE.Scene();
+  readonly camera: THREE.PerspectiveCamera;
+  composer!: EffectComposer;
+  quality: Quality;
+  private aoPass: N8AOPostPass | null = null;
+  private bloom: BloomEffect | null = null;
+  private fpsSamples: number[] = [];
+  private governorLocked = false;
+  onQualityChange?: (q: Quality) => void;
+
+  constructor(canvas: HTMLCanvasElement) {
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", stencil: false, depth: true });
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 900);
+    const saved = localStorage.getItem("cw.quality") as Quality | null;
+    this.quality = saved ?? (navigator.hardwareConcurrency && navigator.hardwareConcurrency >= 8 ? "medium" : "medium");
+    if (saved) this.governorLocked = true;
+    this.buildComposer();
+    this.resize();
+    window.addEventListener("resize", () => this.resize());
+  }
+
+  private pixelRatioFor(q: Quality) {
+    const dpr = window.devicePixelRatio || 1;
+    if (q === "high") return Math.min(dpr, 2);
+    if (q === "medium") return Math.min(dpr, 1.5);
+    return 1;
+  }
+
+  private buildComposer() {
+    if (this.composer) this.composer.dispose();
+    const q = this.quality;
+    this.composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType, multisampling: 0 });
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.aoPass = null;
+    this.bloom = null;
+    if (q !== "low") {
+      const size = this.renderer.getSize(new THREE.Vector2());
+      const ao = new N8AOPostPass(this.scene, this.camera, size.x, size.y);
+      ao.configuration.aoRadius = 2.5;
+      ao.configuration.distanceFalloff = 2.0;
+      ao.configuration.intensity = 2.2;
+      ao.configuration.halfRes = q === "medium";
+      ao.configuration.screenSpaceRadius = false;
+      ao.configuration.gammaCorrection = false;
+      ao.configuration.denoiseRadius = 8;
+      ao.configuration.denoiseSamples = 4;
+      ao.configuration.aoSamples = q === "high" ? 16 : 8;
+      this.composer.addPass(ao);
+      this.aoPass = ao;
+    }
+    const effects: any[] = [];
+    if (q !== "low") {
+      this.bloom = new BloomEffect({ blendFunction: BlendFunction.ADD, mipmapBlur: true, luminanceThreshold: 0.92, luminanceSmoothing: 0.2, intensity: 0.55, radius: 0.6, kernelSize: KernelSize.MEDIUM });
+      effects.push(this.bloom);
+    }
+    effects.push(new VignetteEffect({ eskil: false, offset: 0.28, darkness: 0.42 }));
+    effects.push(new SMAAEffect({ preset: q === "high" ? SMAAPreset.HIGH : SMAAPreset.MEDIUM }));
+    this.composer.addPass(new EffectPass(this.camera, ...effects));
+    this.renderer.setPixelRatio(this.pixelRatioFor(q));
+    this.renderer.shadowMap.needsUpdate = true;
+  }
+
+  setQuality(q: Quality, lock = true) {
+    if (q === this.quality) return;
+    this.quality = q;
+    if (lock) { localStorage.setItem("cw.quality", q); this.governorLocked = true; }
+    this.buildComposer();
+    this.resize();
+    this.onQualityChange?.(q);
+  }
+
+  resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h, false);
+    this.composer.setSize(w, h);
+  }
+
+  private lastW = 0; private lastH = 0;
+
+  /** Call once per frame. Returns the (clamped) frame delta in seconds. */
+  render(dt: number) {
+    const w = window.innerWidth, h = window.innerHeight;
+    if (w < 2 || h < 2) return; // pane not laid out yet — nothing sensible to draw
+    if (w !== this.lastW || h !== this.lastH) { this.lastW = w; this.lastH = h; this.resize(); }
+    this.composer.render(dt);
+    if (!this.governorLocked) this.govern(dt);
+  }
+
+  private govern(dt: number) {
+    if (dt <= 0 || dt > 0.5) return;
+    this.fpsSamples.push(1 / dt);
+    if (this.fpsSamples.length < 180) return; // ~3 s of frames
+    const avg = this.fpsSamples.reduce((a, b) => a + b, 0) / this.fpsSamples.length;
+    this.fpsSamples.length = 0;
+    if (avg < 34 && this.quality !== "low") {
+      this.setQuality(this.quality === "high" ? "medium" : "low", false);
+    } else if (avg > 58 && this.quality === "low") {
+      this.setQuality("medium", false);
+    }
+  }
+}
