@@ -95,7 +95,7 @@ export class PlayMode implements Mode {
     this.thinking = true;
     world.chessPaa.mood = "think";
     let verdict: Verdict | null = null;
-    try { verdict = await judgeMove(engine, m.before, m, this.level.skill >= 9 ? 14 : 12); } catch (e) { console.warn("judge failed", e); }
+    try { verdict = await judgeMove(engine, m.before, m, 12, this.level.skill >= 9 ? 900 : 600); } catch (e) { console.warn("judge failed", e); }
     this.thinking = false;
     if (verdict) {
       const smile = evalToSmile(verdict.evalAfter, this.kidColor === "w");

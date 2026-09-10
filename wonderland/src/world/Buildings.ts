@@ -9,42 +9,50 @@ const std = (color: number, roughness = 0.6, metalness = 0) => new THREE.MeshSta
 
 export function castle(assets: Assets) {
   const g = new THREE.Group();
-  const brick = pbr(assets.tex.castle, { repeat: [3, 2], roughness: 1, metalness: 0, color: 0xf3ece0 });
-  const brickTower = pbr(assets.tex.castle, { repeat: [3, 3], roughness: 1, metalness: 0, color: 0xf3ece0 });
-  const purple = std(0x8e5bd6, 0.55);
-  const towerGeo = new THREE.CylinderGeometry(2.6, 2.9, 12, 20);
-  const roofGeo = new THREE.ConeGeometry(3.3, 5, 20);
-  const corners = [[-9, -6], [9, -6], [-9, 6], [9, 6]];
-  for (const [x, z] of corners) {
-    const t = new THREE.Mesh(towerGeo, brickTower); t.position.set(x, 6, z);
-    const r = new THREE.Mesh(roofGeo, purple); r.position.set(x, 14.5, z);
-    g.add(t, r);
-    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), new THREE.MeshBasicMaterial({ color: [0xe84a5f, 0xffc93c, 0x2ec4c6, 0x7bc96f][corners.indexOf([x, z] as any) % 4] ?? 0xe84a5f, side: THREE.DoubleSide }));
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.5, 6), std(0xfff1d6)); pole.position.set(x, 18.2, z);
-    flag.position.set(x + 0.7, 18.9, z);
-    g.add(pole, flag);
-  }
+  const brick = pbr(assets.tex.castle, { repeat: [3, 2], roughness: 1, metalness: 0, color: 0xf6f1e8 });
+  const brickTower = pbr(assets.tex.castle, { repeat: [3, 3], roughness: 1, metalness: 0, color: 0xf6f1e8 });
+  const roofBlue = std(0x4f7fd6, 0.5), roofPurple = std(0x8e5bd6, 0.5), goldM = std(0xffd23c, 0.3, 0.6);
+  const winMat = std(0x2a3550, 0.4, 0.2);
+  const tower = (x: number, z: number, r: number, h: number, roofH: number, roof: THREE.Material) => {
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.08, h, 20), brickTower); t.position.set(x, h / 2, z);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.25, r * 1.05, 0.8, 20), std(0xe9dfcf, 0.9)); ring.position.set(x, h, z);
+    const rf = new THREE.Mesh(new THREE.ConeGeometry(r * 1.3, roofH, 20), roof); rf.position.set(x, h + roofH / 2 + 0.3, z);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(r * 0.22, 10, 8), goldM); tip.position.set(x, h + roofH + 0.4, z);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.2, 6), goldM); pole.position.set(x, h + roofH + 1.4, z);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), new THREE.MeshBasicMaterial({ color: [0xe84a5f, 0xffc93c, 0x2ec4c6, 0xff8fb1][Math.floor(Math.abs(x * 7 + z * 3)) % 4], side: THREE.DoubleSide })); flag.position.set(x + 0.7, h + roofH + 2.0, z);
+    g.add(t, ring, rf, tip, pole, flag);
+    // windows around the tower
+    for (let i = 0; i < 3; i++) for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2 + 0.4;
+      const w = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.2), winMat);
+      w.position.set(x + Math.cos(a) * r, 3 + i * (h - 4) / 2.5, z + Math.sin(a) * r); w.lookAt(x, w.position.y, z); g.add(w);
+    }
+  };
+  tower(-11, -7, 2.6, 12, 5, roofBlue); tower(11, -7, 2.6, 12, 5, roofBlue); tower(-11, 7, 2.4, 10, 4.5, roofPurple); tower(11, 7, 2.4, 10, 4.5, roofPurple);
+  tower(0, -2, 3.4, 22, 9, roofBlue);   // the great spire
+  tower(-5, 2, 1.9, 16, 6.5, roofPurple); tower(5, 2, 1.9, 16, 6.5, roofPurple);
   // walls with battlements
-  const wallGeo = merge([placed(new THREE.BoxGeometry(18, 7, 1.6), 0, 3.5, -6), placed(new THREE.BoxGeometry(18, 7, 1.6), 0, 3.5, 6), placed(new THREE.BoxGeometry(1.6, 7, 12), -9, 3.5, 0), placed(new THREE.BoxGeometry(1.6, 7, 12), 9, 3.5, 0)]);
-  const walls = new THREE.Mesh(wallGeo, brick);
-  g.add(walls);
+  const wallGeo = merge([placed(new THREE.BoxGeometry(22, 7, 1.6), 0, 3.5, -7), placed(new THREE.BoxGeometry(22, 7, 1.6), 0, 3.5, 7), placed(new THREE.BoxGeometry(1.6, 7, 14), -11, 3.5, 0), placed(new THREE.BoxGeometry(1.6, 7, 14), 11, 3.5, 0)]);
+  g.add(new THREE.Mesh(wallGeo, brick));
   const merlon = new THREE.BoxGeometry(1.0, 0.9, 1.7);
   const mats: THREE.Matrix4[] = [];
-  for (let i = -8; i <= 8; i += 2) { mats.push(new THREE.Matrix4().setPosition(i, 7.45, -6)); mats.push(new THREE.Matrix4().setPosition(i, 7.45, 6)); }
-  for (let i = -5; i <= 5; i += 2) { mats.push(new THREE.Matrix4().compose(new THREE.Vector3(-9, 7.45, i), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), new THREE.Vector3(1, 1, 1))); mats.push(new THREE.Matrix4().compose(new THREE.Vector3(9, 7.45, i), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), new THREE.Vector3(1, 1, 1))); }
+  for (let i = -10; i <= 10; i += 2) { mats.push(new THREE.Matrix4().setPosition(i, 7.45, -7)); mats.push(new THREE.Matrix4().setPosition(i, 7.45, 7)); }
+  for (let i = -6; i <= 6; i += 2) { mats.push(new THREE.Matrix4().compose(new THREE.Vector3(-11, 7.45, i), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), new THREE.Vector3(1, 1, 1))); mats.push(new THREE.Matrix4().compose(new THREE.Vector3(11, 7.45, i), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), new THREE.Vector3(1, 1, 1))); }
   g.add(instanced(merlon, brick, mats));
   // keep
-  const keep = new THREE.Mesh(new THREE.BoxGeometry(9, 12, 9), brick); keep.position.y = 6;
-  const keepRoof = new THREE.Mesh(new THREE.ConeGeometry(7, 5, 4), purple); keepRoof.position.y = 14.5; keepRoof.rotation.y = Math.PI / 4;
+  const keep = new THREE.Mesh(new THREE.BoxGeometry(10, 13, 8), brick); keep.position.set(0, 6.5, 1);
+  const keepRoof = new THREE.Mesh(new THREE.ConeGeometry(7.6, 4.5, 4), roofBlue); keepRoof.position.set(0, 15.2, 1); keepRoof.rotation.y = Math.PI / 4;
   g.add(keep, keepRoof);
-  // gate: dark arch + door
-  const arch = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 1.8, 24, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), std(0x3b2a1a, 0.9));
-  arch.position.set(0, 3.2, 6.05); arch.rotation.y = Math.PI / 2;
-  const door = new THREE.Mesh(new THREE.BoxGeometry(3.6, 3.4, 0.4), std(0x5a3a1e, 0.8)); door.position.set(0, 1.7, 6.2);
-  g.add(door);
+  for (let i = -3; i <= 3; i += 3) for (let k = 0; k < 2; k++) { const w = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 0.2), winMat); w.position.set(i, 5 + k * 5, 5.05); g.add(w); }
+  // gatehouse: arch, door, drawbridge
+  const gateBlock = new THREE.Mesh(new THREE.BoxGeometry(7, 9, 2.4), brick); gateBlock.position.set(0, 4.5, 7.3);
+  const arch = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 2.6, 24, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), std(0x2a1d12, 0.9));
+  arch.position.set(0, 2.6, 8.4); arch.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(3.8, 4.2, 0.3), std(0x5a3a1e, 0.8)); door.position.set(0, 2.1, 8.5);
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.3, 5), std(0x8b5a2b, 0.85)); bridge.position.set(0, 0.15, 11.2);
   const banner = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.2), new THREE.MeshBasicMaterial({ map: sign("PIECE ACADEMY", { bg: "#8e5bd6", fg: "#fff", border: "#fff", emoji: "🏰", w: 1400, h: 360 }), transparent: true }));
-  banner.position.set(0, 9.6, 6.9);
-  g.add(banner);
+  banner.position.set(0, 9.9, 8.6);
+  g.add(gateBlock, door, bridge, banner);
   shadowed(g);
   g.position.copy(PARK.castle);
   g.name = "castle";

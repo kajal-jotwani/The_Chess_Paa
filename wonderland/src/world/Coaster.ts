@@ -86,17 +86,17 @@ export class Coaster {
     this.group.add(instanced(tieGeo, tieMat, tieMats));
 
     // supports every ~5 m where the track is above ground level
-    const colGeo = new THREE.CylinderGeometry(0.22, 0.28, 1, 10).translate(0, 0.5, 0);
-    const colMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: 0.5, metalness: 0.3 });
+    const colGeo = new THREE.CylinderGeometry(0.16, 0.2, 1, 8).translate(0, 0.5, 0);
+    const colMat = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.5, metalness: 0.3 });
     const cols: THREE.Matrix4[] = [];
-    const stepC = Math.max(1, Math.round(5 / (this.length / fr.length)));
+    const stepC = Math.max(1, Math.round(7.5 / (this.length / fr.length)));
     for (let i = 0; i < fr.length; i += stepC) {
       const f = fr[i];
       const ground = heightAt(f.p.x, f.p.z);
       const top = f.p.y - 0.5;
       if (top - ground < 0.8) continue;
       // two legs for tall sections
-      const legs = top - ground > 9 ? [-1.2, 1.2] : [0];
+      const legs = top - ground > 14 ? [-1.2, 1.2] : [0];
       for (const off of legs) {
         const base = new THREE.Vector3(f.p.x + f.b.x * off, ground - 0.2, f.p.z + f.b.z * off);
         const m = new THREE.Matrix4().compose(base, new THREE.Quaternion(), new THREE.Vector3(1, top - ground + 0.2, 1));

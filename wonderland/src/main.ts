@@ -24,6 +24,7 @@ async function boot() {
   const world = new World(r.scene, assets);
   const rig = new CameraRig(r.camera, canvas);
   const app = new App(r, world, rig, assets);
+  (window as any).wonderland = { app, world, rig, renderer: r };
   clearInterval(tipTimer);
   // warm the shaders before revealing (avoids a hitch on first frame)
   r.renderer.compile(r.scene, r.camera);

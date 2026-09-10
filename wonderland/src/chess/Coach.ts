@@ -76,15 +76,15 @@ const TIER_META: Record<Tier, { emoji: string; title: string }> = {
  * move, evaluations); chess.js finds the story (hanging pieces, forks, missed
  * captures, mates); ChessPaa tells it kindly.
  */
-export async function judgeMove(engine: Engine, fenBefore: string, played: Move, depth = 12): Promise<Verdict> {
+export async function judgeMove(engine: Engine, fenBefore: string, played: Move, depth = 12, movetime = 650): Promise<Verdict> {
   const before = new Chess(fenBefore);
   const after = new Chess(played.after);
   const mover = played.color;
   const moverIsWhite = mover === "w";
-  const [evBefore, evAfter] = await Promise.all([
-    engine.evaluate(fenBefore, { depth, multipv: 2 }),
-    engine.evaluate(played.after, { depth, multipv: 1 }),
-  ]);
+  // time-boxed searches keep ChessPaa chatty rather than pensive
+  const evBefore = await engine.evaluate(fenBefore, { movetime, multipv: 2 });
+  const evAfter = await engine.evaluate(played.after, { movetime: Math.round(movetime * 0.7), multipv: 1 });
+  void depth;
   const bestLine = evBefore.lines[0];
   const bestMove = bestLine ? moveFromUci(before, bestLine.move) : null;
   // scores: convert to the mover's perspective in pawns

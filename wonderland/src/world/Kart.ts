@@ -25,13 +25,13 @@ export class Playground {
 
   constructor(private world: World) {
     const p = this.physics;
-    p.broadphase = new CANNON.SAPBroadphase(p);
     p.allowSleep = true;
     (p.solver as CANNON.GSSolver).iterations = 8;
     p.defaultContactMaterial.friction = 0.35;
     p.defaultContactMaterial.restitution = 0.15;
-    const ground = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
-    ground.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    // a thick static slab is the most robust ground for raycast wheels
+    const ground = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(300, 1, 300)) });
+    ground.position.set(0, -1, 0);
     p.addBody(ground);
 
     // static obstacles: buildings, ride bases, lake rim, park fence

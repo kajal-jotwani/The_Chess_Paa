@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Assets, pbr } from "../core/Assets";
-import { cloud, glow } from "../core/Textures";
+import { cloud, glow, leafCluster } from "../core/Textures";
 import { instanced, merge, placed, rnd } from "./Geo";
 import { heightAt } from "./Ground";
 import { PARK, pathNetwork, ATTRACTIONS } from "./Layout";
@@ -41,12 +41,22 @@ export function trees(assets: Assets, avoid: AvoidFn) {
   const rand = rnd(1234);
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.42, 3.4, 8).translate(0, 1.7, 0);
   const trunkMat = pbr(assets.tex.bark, { repeat: [1, 2], roughness: 1, metalness: 0, color: 0xd9c2a6 });
-  const roundGeo = merge([
-    placed(new THREE.SphereGeometry(2.0, 12, 9), 0, 4.4, 0), placed(new THREE.SphereGeometry(1.5, 12, 9), 1.3, 3.7, 0.4),
-    placed(new THREE.SphereGeometry(1.4, 12, 9), -1.2, 3.9, -0.6), placed(new THREE.SphereGeometry(1.3, 12, 9), 0.2, 5.6, -0.3),
-  ]);
+  // canopy = a bundle of leaf cards at random orientations around a few puffs
+  const cardRand = rnd(55);
+  const cards: THREE.BufferGeometry[] = [];
+  const puffs: [number, number, number, number][] = [[0, 4.5, 0, 2.1], [1.3, 3.9, 0.5, 1.6], [-1.2, 4.1, -0.7, 1.5], [0.3, 5.8, -0.2, 1.4], [-0.4, 3.6, 1.2, 1.3]];
+  for (const [px, py, pz, pr] of puffs) {
+    for (let i = 0; i < 9; i++) {
+      const g = new THREE.PlaneGeometry(pr * 1.7, pr * 1.7);
+      const dir = new THREE.Vector3(cardRand() - 0.5, cardRand() - 0.5, cardRand() - 0.5).normalize();
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+      const off = dir.clone().multiplyScalar(pr * 0.45);
+      cards.push(placed(g, px + off.x, py + off.y, pz + off.z, new THREE.Euler().setFromQuaternion(q)));
+    }
+  }
+  const roundGeo = merge(cards);
   const pineGeo = merge([placed(new THREE.ConeGeometry(2.2, 3.2, 10), 0, 3.6, 0), placed(new THREE.ConeGeometry(1.7, 3.0, 10), 0, 5.4, 0), placed(new THREE.ConeGeometry(1.1, 2.6, 10), 0, 7.0, 0)]);
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, envMapIntensity: 0.5 });
+  const leafMat = new THREE.MeshStandardMaterial({ map: leafCluster(0.3), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, envMapIntensity: 0.5, color: 0xffffff });
   const pineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
   const trunks: THREE.Matrix4[] = [], rounds: THREE.Matrix4[] = [], pines: THREE.Matrix4[] = [];
   const roundCols: THREE.Color[] = [], pineCols: THREE.Color[] = [];
@@ -56,7 +66,7 @@ export function trees(assets: Assets, avoid: AvoidFn) {
     const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI * 2);
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y - 0.1, z), rot, new THREE.Vector3(s, s, s));
     trunks.push(m);
-    if (rand() < 0.62) { rounds.push(m); roundCols.push(new THREE.Color().setHSL(0.26 + rand() * 0.08, 0.55 + rand() * 0.2, 0.32 + rand() * 0.14)); }
+    if (rand() < 0.62) { rounds.push(m); roundCols.push(new THREE.Color().setHSL(0.27 + rand() * 0.08, 0.5, 0.5 + rand() * 0.25)); }
     else { pines.push(m); pineCols.push(new THREE.Color().setHSL(0.36 + rand() * 0.05, 0.45, 0.22 + rand() * 0.1)); }
   };
   // outer ring

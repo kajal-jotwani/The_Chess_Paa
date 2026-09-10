@@ -164,3 +164,47 @@ export function waterNormals(size = 512) {
     return toTexture(c, false, true);
   });
 }
+
+/** Low-frequency value noise (tileable) to break up texture repetition. */
+export function macroNoise(size = 256) {
+  return memo("macroNoise", () => {
+    const [c, ctx] = canvas(size, size);
+    const img = ctx.createImageData(size, size);
+    const grid = 8; const cells: number[] = [];
+    for (let i = 0; i < grid * grid; i++) cells.push(Math.random());
+    const at = (gx: number, gy: number) => cells[((gy + grid) % grid) * grid + ((gx + grid) % grid)];
+    const sm = (t: number) => t * t * (3 - 2 * t);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const fx = (x / size) * grid, fy = (y / size) * grid;
+      const gx = Math.floor(fx), gy = Math.floor(fy), tx = sm(fx - gx), ty = sm(fy - gy);
+      const v = (at(gx, gy) * (1 - tx) + at(gx + 1, gy) * tx) * (1 - ty) + (at(gx, gy + 1) * (1 - tx) + at(gx + 1, gy + 1) * tx) * ty;
+      const i = (y * size + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = v * 255; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return toTexture(c, false, true);
+  });
+}
+
+/** A cluster of painted leaves with alpha, for tree canopy cards. */
+export function leafCluster(hue = 0.3, size = 256) {
+  return memo(`leaf:${hue}`, () => {
+    const [c, ctx] = canvas(size, size);
+    ctx.clearRect(0, 0, size, size);
+    const r = rnd(hue * 1000 + 7);
+    for (let i = 0; i < 170; i++) {
+      const x = size * (0.5 + (r() - 0.5) * 0.92), y = size * (0.5 + (r() - 0.5) * 0.92);
+      const d = Math.hypot(x - size / 2, y - size / 2) / (size / 2);
+      if (d > 0.98) continue;
+      const len = 10 + r() * 16, w = 5 + r() * 6, a = r() * Math.PI * 2;
+      const l = 0.28 + r() * 0.26 - d * 0.1;
+      ctx.fillStyle = `hsl(${(hue + (r() - 0.5) * 0.06) * 360}, ${52 + r() * 25}%, ${l * 100}%)`;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(len / 2, -w, len, 0); ctx.quadraticCurveTo(len / 2, w, 0, 0); ctx.fill();
+      ctx.restore();
+    }
+    const t = toTexture(c, true, false);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return t;
+  });
+}
+function rnd(seed: number) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }

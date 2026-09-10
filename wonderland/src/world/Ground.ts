@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Assets, pbr } from "../core/Assets";
-import { groundMask } from "../core/Textures";
+import { groundMask, macroNoise } from "../core/Textures";
 import { PARK, pathNetwork } from "./Layout";
 
 const SIZE = 520;
@@ -80,6 +80,7 @@ export function buildGround(assets: Assets) {
     shader.uniforms.sandTint = { value: new THREE.Color(1.55, 1.22, 0.78) };
     shader.uniforms.grassTint = { value: new THREE.Color(1.05, 1.28, 0.72) };
     shader.uniforms.worldSize = { value: SIZE };
+    shader.uniforms.macroMap = { value: macroNoise() };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vWorldXZ;")
       .replace("#include <fog_vertex>", "#include <fog_vertex>\nvWorldXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
@@ -87,13 +88,15 @@ export function buildGround(assets: Assets) {
       .replace("#include <common>", `#include <common>
         varying vec2 vWorldXZ;
         uniform sampler2D sandMap; uniform sampler2D sandNormal; uniform sampler2D sandArm; uniform sampler2D maskMap;
-        uniform float sandScale; uniform vec3 sandTint; uniform vec3 grassTint; uniform float worldSize;
+        uniform float sandScale; uniform vec3 sandTint; uniform vec3 grassTint; uniform float worldSize; uniform sampler2D macroMap;
         float groundMix() { return texture2D(maskMap, vWorldXZ / worldSize + 0.5).r; }`)
       .replace("#include <map_fragment>", `
         float gm = groundMix();
         vec4 gTex = texture2D(map, vMapUv);
         vec4 sTex = texture2D(sandMap, vMapUv * sandScale);
         vec3 col = mix(gTex.rgb * grassTint, sTex.rgb * sandTint, gm);
+        float macro = texture2D(macroMap, vWorldXZ / 70.0).r;
+        col *= 0.82 + 0.36 * macro;
         diffuseColor.rgb *= col;`)
       .replace("vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;", `
         vec3 mapN = mix(texture2D( normalMap, vNormalMapUv ).xyz, texture2D( sandNormal, vNormalMapUv * sandScale ).xyz, groundMix()) * 2.0 - 1.0;`)

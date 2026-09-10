@@ -10,6 +10,7 @@ import { trees, shrubsAndFlowers, Sky3D, bunting, defaultAvoid } from "./Nature"
 import { FolkFactory, Folk, ChessPaa, Kid } from "./Characters";
 import { PARK, ATTRACTIONS, pathNetwork, byId, AttractionId } from "./Layout";
 import { pieceMaterials, pieceGeometries, PieceMaterials } from "../chess/Materials";
+import { paving, Fountain, fencesAndHedges, Birds } from "./Details";
 
 interface Wanderer { folk: Folk; path: THREE.Vector3[]; seg: number; t: number; speed: number; }
 
@@ -28,6 +29,8 @@ export class World {
   readonly pieceGeos: Record<string, THREE.BufferGeometry>;
   private ground: ReturnType<typeof buildGround>;
   private sky3d: Sky3D;
+  private fountain: Fountain;
+  private birds: Birds;
   private wanderers: Wanderer[] = [];
   private time = 0;
   private shadowTarget = new THREE.Object3D();
@@ -68,7 +71,11 @@ export class World {
     const knight = new THREE.Mesh(this.pieceGeos.knight);
     this.carousel = new Carousel(PARK.carousel, knight, this.pieceMats.white, this.pieceMats.black);
     this.group.add(this.carousel.group);
-    this.group.add(castle(assets), bigTop(), umbrella(PARK.umbrella), shops(), gate(), signage(), furniture());
+    this.group.add(castle(assets), bigTop(), umbrella(PARK.umbrella), shops(), gate(), signage(), furniture(), paving(assets), fencesAndHedges());
+    this.fountain = new Fountain(new THREE.Vector3(0, 0, 36));
+    this.group.add(this.fountain.group);
+    this.birds = new Birds();
+    this.group.add(this.birds.group);
 
     const track = this.coaster.frames.filter((_, i) => i % 6 === 0).map((f) => f.p);
     const avoid = defaultAvoid((x, z) => { for (const p of track) if (Math.hypot(x - p.x, z - p.z) < 3.2) return true; return false; });
@@ -139,6 +146,8 @@ export class World {
     this.train.update(dt);
     this.carousel.update(dt);
     this.sky3d.update(dt, t);
+    this.fountain.update(dt);
+    this.birds.update(dt);
     this.chessPaa.update(dt, t);
     for (const k of this.kids) k.update(dt, t);
     for (const w of this.wanderers) {
