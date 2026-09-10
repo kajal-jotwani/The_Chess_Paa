@@ -5,7 +5,7 @@ import { waterNormals } from "./Textures";
 
 export interface PBRSet { map: THREE.Texture; normalMap: THREE.Texture; armMap: THREE.Texture; }
 export interface Assets {
-  models: { pieces: THREE.Group; chesspaa: THREE.Group; kids: THREE.Group; piecefolk: THREE.Group };
+  models: { pieces: THREE.Group; pieces_lod: THREE.Group; chesspaa: THREE.Group; kids: THREE.Group; piecefolk: THREE.Group };
   tex: Record<"grass" | "sand" | "wood_light" | "wood_dark" | "wood_frame" | "bark" | "castle" | "cobble", PBRSet>;
   envMap: THREE.Texture;
   skyMap: THREE.Texture;
@@ -16,7 +16,7 @@ const TEX_NAMES = ["grass", "sand", "wood_light", "wood_dark", "wood_frame", "ba
 
 export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (frac: number, label: string) => void): Promise<Assets> {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const total = 4 + TEX_NAMES.length * 3 + 2;
+  const total = 5 + TEX_NAMES.length * 3 + 2;
   let done = 0;
   const tick = (label: string) => { done++; onProgress(done / total, label); };
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -32,7 +32,7 @@ export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (fra
     }, undefined, rej);
   });
 
-  const modelsP = Promise.all((["pieces", "chesspaa", "kids", "piecefolk"] as const).map(async (name) => {
+  const modelsP = Promise.all((["pieces", "pieces_lod", "chesspaa", "kids", "piecefolk"] as const).map(async (name) => {
     const g = await gltf.loadAsync(`${base}/models/${name}.glb`);
     tick(name);
     return [name, g.scene] as const;

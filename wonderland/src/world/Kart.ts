@@ -124,7 +124,7 @@ export class Playground {
   unseatDriver() { if (this.driver) { this.kart.remove(this.driver); this.driver.scale.setScalar(1); this.driver = undefined; } }
 
   private buildProps() {
-    const geos = this.world.pieceGeos, mats = this.world.pieceMats;
+    const geos = this.world.pieceGeosLod, mats = this.world.pieceMats;
     const addDyn = (mesh: THREE.Object3D, body: CANNON.Body, x: number, y: number, z: number) => {
       body.position.set(x, y, z); body.sleepSpeedLimit = 0.3; body.sleepTimeLimit = 0.6;
       this.physics.addBody(body); this.group.add(mesh); this.dyn.push({ body, mesh });

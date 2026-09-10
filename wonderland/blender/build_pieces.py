@@ -239,6 +239,13 @@ def main():
         ob.location = (0, 0, 0)
     lib.export_glb(os.path.join(OUT, "pieces.glb"), list(pieces.values()))
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(PREVIEW, "pieces.blend"))
+    # low-detail set for the scenery boards, carousel and physics props
+    for ob in pieces.values():
+        m = ob.modifiers.new("lod", "DECIMATE")
+        m.ratio = 0.18
+        lib.apply_modifiers(ob)
+        print(f"lod {ob.name}: {len(ob.data.polygons)} faces")
+    lib.export_glb(os.path.join(OUT, "pieces_lod.glb"), list(pieces.values()))
 
 
 if __name__ == "__main__":

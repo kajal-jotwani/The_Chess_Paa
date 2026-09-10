@@ -79,6 +79,9 @@ def build_folk(kind, colour):
     lib.select_only(body)
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     body.name = "body"
+    dec = body.modifiers.new("lod", "DECIMATE")
+    dec.ratio = 0.3
+    lib.apply_modifiers(body)
     assign(body, colour)
     set_parent(body, root)
     skin = colour

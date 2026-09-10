@@ -21,6 +21,8 @@ export class Board3D {
   readonly squareSize: number;
   private pieces = new Map<Square, PieceMesh>();
   private geos: Record<string, THREE.BufferGeometry>;
+  private geosHigh: Record<string, THREE.BufferGeometry>;
+  private geosLow: Record<string, THREE.BufferGeometry>;
   private mats: PieceMaterials;
   private picker: THREE.Mesh;
   private dots: THREE.InstancedMesh;
@@ -43,9 +45,9 @@ export class Board3D {
   onHover?: (sq: Square | null) => void;
   private handlers: { down: (e: PointerEvent) => void; up: (e: PointerEvent) => void; move: (e: PointerEvent) => void } | null = null;
 
-  constructor(assets: Assets, geos: Record<string, THREE.BufferGeometry>, mats: PieceMaterials, squareSize = 0.6) {
+  constructor(assets: Assets, geos: Record<string, THREE.BufferGeometry>, mats: PieceMaterials, squareSize = 0.6, geosLow?: Record<string, THREE.BufferGeometry>) {
     this.squareSize = squareSize;
-    this.geos = geos; this.mats = mats;
+    this.geosHigh = geos; this.geosLow = geosLow ?? geos; this.geos = this.geosLow; this.mats = mats;
     this.pieceScale = squareSize / 0.6;
     const s = squareSize, half = 4 * s;
     // squares: two merged meshes (light, dark)
@@ -242,6 +244,13 @@ export class Board3D {
     (this.dots.material as THREE.MeshBasicMaterial).opacity = 0.7 + Math.sin(t * 4) * 0.2;
   }
   pieceAt(sq: Square) { return this.pieces.get(sq); }
+  /** Full-detail turnings only on the board being played; scenery boards use the LOD set. */
+  setDetail(high: boolean) {
+    const set = high ? this.geosHigh : this.geosLow;
+    if (this.geos === set) return;
+    this.geos = set;
+    for (const p of this.pieces.values()) p.mesh.geometry = set[TYPE_NAME[p.type]];
+  }
 
   /* ---------------- input ---------------- */
   attach(dom: HTMLElement, camera: THREE.Camera) {

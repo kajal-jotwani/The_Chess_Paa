@@ -27,6 +27,7 @@ export class World {
   readonly kids: Kid[];
   readonly pieceMats: PieceMaterials;
   readonly pieceGeos: Record<string, THREE.BufferGeometry>;
+  readonly pieceGeosLod: Record<string, THREE.BufferGeometry>;
   private ground: ReturnType<typeof buildGround>;
   private sky3d: Sky3D;
   private fountain: Fountain;
@@ -58,6 +59,7 @@ export class World {
 
     this.pieceMats = pieceMaterials(assets);
     this.pieceGeos = pieceGeometries(assets.models.pieces);
+    this.pieceGeosLod = pieceGeometries(assets.models.pieces_lod);
     this.folkFactory = new FolkFactory(assets.models.piecefolk);
 
     this.ground = buildGround(assets);
@@ -68,7 +70,7 @@ export class World {
     this.group.add(this.ferris.group);
     this.train = new Train(this.folkFactory);
     this.group.add(this.train.group);
-    const knight = new THREE.Mesh(this.pieceGeos.knight);
+    const knight = new THREE.Mesh(this.pieceGeosLod.knight);
     this.carousel = new Carousel(PARK.carousel, knight, this.pieceMats.white, this.pieceMats.black);
     this.group.add(this.carousel.group);
     this.group.add(castle(assets), bigTop(), umbrella(PARK.umbrella), shops(), gate(), signage(), furniture(), paving(assets), fencesAndHedges());

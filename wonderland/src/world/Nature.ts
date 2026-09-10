@@ -102,7 +102,7 @@ export function shrubsAndFlowers(avoid: AvoidFn) {
   const bushGeo = new THREE.SphereGeometry(0.9, 10, 8).scale(1, 0.7, 1).translate(0, 0.45, 0);
   const bushMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
   const bushes: THREE.Matrix4[] = [], bushCols: THREE.Color[] = [];
-  const flowerGeo = merge([placed(new THREE.SphereGeometry(0.16, 6, 5), 0, 0.42, 0), placed(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4), 0, 0.2, 0)]);
+  const flowerGeo = merge([placed(new THREE.SphereGeometry(0.09, 6, 5), 0, 0.26, 0), placed(new THREE.CylinderGeometry(0.015, 0.015, 0.26, 4), 0, 0.13, 0), placed(new THREE.SphereGeometry(0.16, 6, 5).scale(1, 0.4, 1), 0, 0.05, 0)]);
   const flowerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
   const flowers: THREE.Matrix4[] = [], flowerCols: THREE.Color[] = [];
   const palette = [0xff4f6d, 0xffc93c, 0xff8fb1, 0xb388ff, 0xffffff, 0xff7a1a];
@@ -121,8 +121,8 @@ export function shrubsAndFlowers(avoid: AvoidFn) {
           bushes.push(new THREE.Matrix4().compose(new THREE.Vector3(x, heightAt(x, z), z), new THREE.Quaternion(), new THREE.Vector3(s, s, s)));
           bushCols.push(new THREE.Color().setHSL(0.28 + rand() * 0.06, 0.55, 0.36 + rand() * 0.1));
         }
-        for (let f = 0; f < 6; f++) {
-          const fx = x + (rand() - 0.5) * 2.4, fz = z + (rand() - 0.5) * 2.4;
+        for (let f = 0; f < 10; f++) {
+          const fx = x + (rand() - 0.5) * 2.0, fz = z + (rand() - 0.5) * 2.0;
           flowers.push(new THREE.Matrix4().setPosition(fx, heightAt(fx, fz), fz));
           flowerCols.push(new THREE.Color(palette[Math.floor(rand() * palette.length)]));
         }
@@ -130,8 +130,8 @@ export function shrubsAndFlowers(avoid: AvoidFn) {
     }
   }
   // flower beds around the plaza
-  for (let i = 0; i < 260; i++) {
-    const a = rand() * Math.PI * 2, r = 11 + rand() * 3;
+  for (let i = 0; i < 520; i++) {
+    const a = rand() * Math.PI * 2, r = 25 + rand() * 2.2;
     const x = Math.cos(a) * r, z = 8 + Math.sin(a) * r;
     if (nearPath(x, z, 3)) continue;
     flowers.push(new THREE.Matrix4().setPosition(x, heightAt(x, z), z));

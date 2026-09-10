@@ -49,7 +49,7 @@ export class App {
     this.ui.onQuality = () => { const order = ["low", "medium", "high"] as const; const q = order[(order.indexOf(r.quality) + 1) % 3]; r.setQuality(q); this.ui.setQualityLabel(q); this.ui.toast(`Graphics: ${q}`); };
     r.onQualityChange = (q) => this.ui.setQualityLabel(q);
     for (const a of ATTRACTIONS) {
-      const b = new Board3D(assets, world.pieceGeos, world.pieceMats, 0.6);
+      const b = new Board3D(assets, world.pieceGeos, world.pieceMats, 0.6, world.pieceGeosLod);
       b.group.position.copy(a.board.pos).setY(heightAt(a.board.pos.x, a.board.pos.z));
       b.group.rotation.y = a.board.yaw;
       world.group.add(b.group);
@@ -67,6 +67,7 @@ export class App {
   /* ------------------------------------------------------------ hub */
   goHub(first = false) {
     this.setMode(null);
+    for (const k of Object.keys(this.boards) as AttractionId[]) this.boards[k].setDetail(false);
     this.ride?.exit(); this.ride = null;
     this.inHub = true;
     this.ui.clearAll(); this.ui.showHome(false);
@@ -118,6 +119,7 @@ export class App {
   /** Enter an attraction (from the hub or from the ride). */
   async enter(id: AttractionId, fromRide = false) {
     const a = byId(id);
+    for (const k of Object.keys(this.boards) as AttractionId[]) this.boards[k].setDetail(k === id);
     this.inHub = false; this.hideLabels(); this.ui.hidePanel(); this.ui.showHome(true);
     this.world.setShadowFocus(a.board.pos, 26);
     if (this.ride && !fromRide) { this.ride.exit(); this.ride = null; }
