@@ -67,8 +67,6 @@ def face(parent, kind, z, scale=1.0):
     smile = tube("smile", arc, 0.0045 * scale, count=8)
     assign(smile, mouth_m)
     parts.append(smile)
-    for p in parts:
-        set_parent(p, parent)
     return parts
 
 
@@ -85,8 +83,7 @@ def build_folk(kind, colour):
     assign(body, colour)
     set_parent(body, root)
     skin = colour
-    if z_face is not None:
-        face(root, kind, z_face)
+    face_parts = face(root, kind, z_face) if z_face is not None else []
     # arms
     mitten = material("mitten", color=(0.98, 0.98, 0.96), roughness=0.5)
     for sx, side in ((-1, "L"), (1, "R")):
@@ -94,20 +91,31 @@ def build_folk(kind, colour):
         pts = lib.smooth_points([(0, 0, 0), (sx * 0.05, -0.01, -0.03), (sx * 0.10, -0.03, -0.055), (sx * 0.14, -0.05, -0.07)], 1, 4)
         arm = tube(f"arm{side}_mesh", pts, 0.016, count=10, radii=[0.018 - 0.004 * i / (len(pts) - 1) for i in range(len(pts))])
         assign(arm, colour)
-        set_parent(arm, shoulder, keep_world=False)
         hand = uv_sphere(f"hand{side}", radius=0.026, location=(sx * 0.15, -0.055, -0.075), segments=16, rings=12)
         assign(hand, mitten)
-        set_parent(hand, shoulder, keep_world=False)
+        limb = lib.join_vertex_coloured([arm, hand], f"arm{side}_mesh", lib.vc_material())
+        set_parent(limb, shoulder, keep_world=False)
     # legs (hidden when seated): stick legs from under the base
     legs = empty("legs", location=(0, 0, 0), parent=root)
     shoe_m = material("folk_shoe", color=(0.72, 0.13, 0.10), roughness=0.4, coat=0.5)
+    leg_parts = []
     for sx in (-1, 1):
         leg = cylinder(f"leg{sx}", radius=0.012, depth=0.09, location=(sx * r_base * 0.45, 0.0, -0.045), segments=10)
         assign(leg, colour)
-        set_parent(leg, legs, keep_world=False)
         shoe = uv_sphere(f"shoe{sx}", radius=0.03, location=(sx * r_base * 0.45, -0.015, -0.095), scale=(0.9, 1.6, 0.55), segments=16, rings=10)
         assign(shoe, shoe_m)
-        set_parent(shoe, legs, keep_world=False)
+        for o in (leg, shoe):
+            lib.select_only(o)
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        leg_parts += [leg, shoe]
+    legs_mesh = lib.join_vertex_coloured(leg_parts, "legs_mesh", lib.vc_material())
+    set_parent(legs_mesh, legs, keep_world=False)
+    # body + face -> one vertex-coloured mesh
+    for o in face_parts:
+        lib.select_only(o)
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    body_all = lib.join_vertex_coloured([body] + face_parts, "body", lib.vc_material())
+    set_parent(body_all, root)
     return root
 
 

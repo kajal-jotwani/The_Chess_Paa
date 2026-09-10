@@ -594,3 +594,45 @@ def preview_render(filepath, look_at=(0, 0, 0.5), distance=4.0, elevation=0.35, 
     scn.view_settings.view_transform = "AgX" if "AgX" in [i.identifier for i in scn.view_settings.bl_rna.properties["view_transform"].enum_items] else "Filmic"
     bpy.ops.render.render(write_still=True)
     print("rendered", filepath)
+
+
+def bake_vertex_colour(ob):
+    """Write the object's material base colour into a COLOR_0 attribute."""
+    me = ob.data
+    col = (0.8, 0.8, 0.8, 1.0)
+    if me.materials and me.materials[0] and me.materials[0].use_nodes:
+        bsdf = me.materials[0].node_tree.nodes.get("Principled BSDF")
+        if bsdf:
+            col = tuple(bsdf.inputs["Base Color"].default_value)
+    attr = me.color_attributes.get("Col") or me.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    n = len(me.loops)
+    attr.data.foreach_set("color", list(col) * n)
+    me.color_attributes.active_color = attr
+
+
+def join_vertex_coloured(objects, name, material):
+    """Bake each part's colour to vertex colours, join into one mesh with one material."""
+    objects = [o for o in objects if o and o.type == "MESH"]
+    for o in objects:
+        bake_vertex_colour(o)
+    ob = join(objects, name)
+    ob.data.materials.clear()
+    ob.data.materials.append(material)
+    return ob
+
+
+def vc_material(name="vertex_colour", roughness=0.5, coat=0.3):
+    mat = bpy.data.materials.get(name)
+    if mat:
+        return mat
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    bsdf = nodes.get("Principled BSDF")
+    bsdf.inputs["Roughness"].default_value = roughness
+    if "Coat Weight" in bsdf.inputs:
+        bsdf.inputs["Coat Weight"].default_value = coat
+    attr = nodes.new("ShaderNodeVertexColor")
+    attr.layer_name = "Col"
+    mat.node_tree.links.new(attr.outputs["Color"], bsdf.inputs["Base Color"])
+    return mat

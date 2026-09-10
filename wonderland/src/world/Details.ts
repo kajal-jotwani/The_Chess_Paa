@@ -92,7 +92,8 @@ export function fencesAndHedges() {
       }
     }
   }
-  g.add(instanced(picket, white, pickets), instanced(rail, white, rails));
+  const pk = instanced(picket, white, pickets); pk.castShadow = false; const rl = instanced(rail, white, rails); rl.castShadow = false;
+  g.add(pk, rl);
   // hedges: a ring of trimmed boxes around each board plaza
   const hedgeGeo = new THREE.BoxGeometry(1.6, 0.9, 0.8);
   const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x3f8f3a, roughness: 0.95 });

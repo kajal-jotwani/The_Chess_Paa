@@ -40,7 +40,7 @@ export class Renderer {
   private pixelRatioFor(q: Quality) {
     const dpr = window.devicePixelRatio || 1;
     if (q === "high") return Math.min(dpr, 2);
-    if (q === "medium") return Math.min(dpr, 1.5);
+    if (q === "medium") return Math.min(dpr, 1.25);
     return 1;
   }
 

@@ -287,10 +287,13 @@ def build_kid(name, skin_c, hair_c, shirt_c, shorts_c, curly, x=0.0):
         fringe = uv_sphere("fringe", radius=0.09, location=(0, -0.11, 1.03), scale=(1.4, 0.7, 0.5), segments=20, rings=12)
         assign(fringe, hair)
         hp += [cap, fringe]
-    for p in hp:
-        set_parent(p, head_node)
-    for p in (torso, pants, neck):
-        set_parent(p, root)
+    for o in hp + [torso, pants, neck]:
+        lib.select_only(o)
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    head_all = lib.join_vertex_coloured(hp, "head_mesh", lib.vc_material("kid_vc", 0.6, 0.15))
+    set_parent(head_all, head_node)
+    torso_all = lib.join_vertex_coloured([torso, pants, neck], "torso", lib.vc_material("kid_vc", 0.6, 0.15))
+    set_parent(torso_all, root)
     for sx, side in ((-1, "L"), (1, "R")):
         shoulder = empty(f"arm{side}", location=(sx * 0.155, 0, 0.66), parent=root)
         upper = capsule(f"upperarm{side}", 0.042, 0.17)
@@ -299,17 +302,21 @@ def build_kid(name, skin_c, hair_c, shirt_c, shorts_c, curly, x=0.0):
         elbow = empty(f"forearm{side}", location=(0, 0, -0.16), parent=shoulder, world=False)
         fore = capsule(f"forearm{side}_mesh", 0.038, 0.16)
         assign(fore, skin)
-        set_parent(fore, elbow, keep_world=False)
         hand = uv_sphere(f"hand{side}", radius=0.042, location=(0, 0, -0.17), segments=16, rings=12)
         assign(hand, skin)
-        set_parent(hand, elbow, keep_world=False)
+        lib.select_only(hand)
+        bpy.ops.object.transform_apply(location=True)
+        fore_all = lib.join_vertex_coloured([fore, hand], f"forearm{side}_mesh", lib.vc_material("kid_vc", 0.6, 0.15))
+        set_parent(fore_all, elbow, keep_world=False)
         hip = empty(f"leg{side}", location=(sx * 0.07, 0, 0.28), parent=root)
         leg = capsule(f"leg{side}_mesh", 0.05, 0.25)
         assign(leg, skin)
-        set_parent(leg, hip, keep_world=False)
         shoe = uv_sphere(f"shoe{side}", radius=0.055, location=(0, -0.02, -0.255), scale=(0.9, 1.5, 0.6), segments=20, rings=12)
         assign(shoe, shoe_m)
-        set_parent(shoe, hip, keep_world=False)
+        lib.select_only(shoe)
+        bpy.ops.object.transform_apply(location=True, scale=True)
+        leg_all = lib.join_vertex_coloured([leg, shoe], f"leg{side}_mesh", lib.vc_material("kid_vc", 0.6, 0.15))
+        set_parent(leg_all, hip, keep_world=False)
     for sx, side in ((-1, "L"), (1, "R")):
         for o in root.children_recursive:
             if o.name.startswith(f"arm{side}") and o.type == "EMPTY":

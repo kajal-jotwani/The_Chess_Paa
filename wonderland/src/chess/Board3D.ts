@@ -122,7 +122,7 @@ export class Board3D {
   /* ---------------- pieces ---------------- */
   private makePiece(type: PieceSymbol, color: Color, sq: Square): PieceMesh {
     const mesh = new THREE.Mesh(this.geos[TYPE_NAME[type]], color === "w" ? this.mats.white : this.mats.black);
-    mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.castShadow = this.geos === this.geosHigh; mesh.receiveShadow = true;
     mesh.scale.setScalar(this.pieceScale);
     mesh.position.copy(this.squareToLocal(sq)).setY(0.13);
     mesh.rotation.y = type === "n" ? (color === "w" ? Math.PI : 0) : 0;
@@ -249,7 +249,7 @@ export class Board3D {
     const set = high ? this.geosHigh : this.geosLow;
     if (this.geos === set) return;
     this.geos = set;
-    for (const p of this.pieces.values()) p.mesh.geometry = set[TYPE_NAME[p.type]];
+    for (const p of this.pieces.values()) { p.mesh.geometry = set[TYPE_NAME[p.type]]; p.mesh.castShadow = high; }
   }
 
   /* ---------------- input ---------------- */

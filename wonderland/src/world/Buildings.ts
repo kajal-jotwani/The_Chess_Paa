@@ -13,6 +13,8 @@ export function castle(assets: Assets) {
   const brickTower = pbr(assets.tex.castle, { repeat: [3, 3], roughness: 1, metalness: 0, color: 0xf6f1e8 });
   const roofBlue = std(0x4f7fd6, 0.5), roofPurple = std(0x8e5bd6, 0.5), goldM = std(0xffd23c, 0.3, 0.6);
   const winMat = std(0x2a3550, 0.4, 0.2);
+  const winGeo = new THREE.BoxGeometry(0.7, 1.2, 0.2);
+  const wins: THREE.Matrix4[] = [];
   const tower = (x: number, z: number, r: number, h: number, roofH: number, roof: THREE.Material) => {
     const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.08, h, 20), brickTower); t.position.set(x, h / 2, z);
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.25, r * 1.05, 0.8, 20), std(0xe9dfcf, 0.9)); ring.position.set(x, h, z);
@@ -24,8 +26,9 @@ export function castle(assets: Assets) {
     // windows around the tower
     for (let i = 0; i < 3; i++) for (let k = 0; k < 4; k++) {
       const a = (k / 4) * Math.PI * 2 + 0.4;
-      const w = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.2), winMat);
-      w.position.set(x + Math.cos(a) * r, 3 + i * (h - 4) / 2.5, z + Math.sin(a) * r); w.lookAt(x, w.position.y, z); g.add(w);
+      const pos = new THREE.Vector3(x + Math.cos(a) * r, 3 + i * (h - 4) / 2.5, z + Math.sin(a) * r);
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a + Math.PI / 2);
+      wins.push(new THREE.Matrix4().compose(pos, q, new THREE.Vector3(1, 1, 1)));
     }
   };
   tower(-11, -7, 2.6, 12, 5, roofBlue); tower(11, -7, 2.6, 12, 5, roofBlue); tower(-11, 7, 2.4, 10, 4.5, roofPurple); tower(11, 7, 2.4, 10, 4.5, roofPurple);
@@ -43,7 +46,8 @@ export function castle(assets: Assets) {
   const keep = new THREE.Mesh(new THREE.BoxGeometry(10, 13, 8), brick); keep.position.set(0, 6.5, 1);
   const keepRoof = new THREE.Mesh(new THREE.ConeGeometry(7.6, 4.5, 4), roofBlue); keepRoof.position.set(0, 15.2, 1); keepRoof.rotation.y = Math.PI / 4;
   g.add(keep, keepRoof);
-  for (let i = -3; i <= 3; i += 3) for (let k = 0; k < 2; k++) { const w = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 0.2), winMat); w.position.set(i, 5 + k * 5, 5.05); g.add(w); }
+  for (let i = -3; i <= 3; i += 3) for (let k = 0; k < 2; k++) wins.push(new THREE.Matrix4().compose(new THREE.Vector3(i, 5 + k * 5, 5.05), new THREE.Quaternion(), new THREE.Vector3(1.4, 1.3, 1)));
+  g.add(instanced(winGeo, winMat, wins));
   // gatehouse: arch, door, drawbridge
   const gateBlock = new THREE.Mesh(new THREE.BoxGeometry(7, 9, 2.4), brick); gateBlock.position.set(0, 4.5, 7.3);
   const arch = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 2.6, 24, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), std(0x2a1d12, 0.9));
