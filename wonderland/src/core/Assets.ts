@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { waterNormals } from "./Textures";
 
@@ -81,7 +81,7 @@ export function pbr(set: PBRSet, opts: { repeat?: number | [number, number]; col
 /** Load one of the sky domes and prefilter it for reflections. */
 export async function loadSky(renderer: THREE.WebGLRenderer, name: string): Promise<{ envMap: THREE.Texture; skyMap: THREE.Texture }> {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const hdr = await new RGBELoader().loadAsync(`${base}/hdr/${name}.hdr`);
+  const hdr = await new HDRLoader().loadAsync(`${base}/hdr/${name}.hdr`);
   const pmrem = new THREE.PMREMGenerator(renderer);
   pmrem.compileEquirectangularShader();
   const envMap = pmrem.fromEquirectangular(hdr).texture;

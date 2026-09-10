@@ -8,7 +8,18 @@ function findByPrefix(root: THREE.Object3D, prefix: string): THREE.Object3D | un
   return found;
 }
 
+/** gltfpack leaves mesh nodes unnamed under their named parent — give them the parent's name. */
+function nameMeshesAfterParents(root: THREE.Object3D) {
+  root.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh && (!o.name || /^mesh_\d+$/.test(o.name)) && o.parent && o.parent.name) {
+      // an unnamed mesh directly under a joint empty is that joint's skin; under a named mesh-node it *is* that node
+      o.name = o.parent.children.length === 1 && !(o.parent as THREE.Mesh).isMesh ? o.parent.name : o.parent.name + "_mesh";
+    }
+  });
+}
+
 function prepare(root: THREE.Object3D, envIntensity = 0.9) {
+  nameMeshesAfterParents(root);
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     if (m.isMesh) {

@@ -17,9 +17,13 @@ export function pieceMaterials(assets: Assets): PieceMaterials {
 
 export function pieceGeometries(pieces: THREE.Group): Record<string, THREE.BufferGeometry> {
   const out: Record<string, THREE.BufferGeometry> = {};
+  const KINDS = ["king", "queen", "bishop", "knight", "rook", "pawn"];
   pieces.traverse((o) => {
     const m = o as THREE.Mesh;
-    if (m.isMesh && ["king", "queen", "bishop", "knight", "rook", "pawn"].includes(m.name)) {
+    // gltfpack parks each mesh in an unnamed child of the named node
+    const name = KINDS.includes(m.name) ? m.name : (m.parent && KINDS.includes(m.parent.name) ? m.parent.name : "");
+    if (m.isMesh && name) {
+      m.name = name;
       const g = m.geometry;
       if (!g.attributes.uv2 && g.attributes.uv) g.setAttribute("uv2", g.attributes.uv);
       g.computeBoundingBox();
