@@ -31,22 +31,26 @@ async function boot() {
   document.getElementById("loader")!.classList.add("hidden");
   app.start();
 
-  const clock = new THREE.Clock();
   let last = performance.now();
+  let simTime = last / 1000;
+  const step = (dt: number, render = true) => {
+    simTime += dt;
+    tweenUpdate(simTime);
+    world.update(dt);
+    app.update(dt);
+    rig.update(dt);
+    if (render) r.render(dt);
+  };
   function frame() {
     requestAnimationFrame(frame);
     const now = performance.now();
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    tweenUpdate(now / 1000);
-    world.update(dt);
-    app.update(dt);
-    rig.update(dt);
-    r.render(dt);
+    step(dt);
   }
-  clock.start();
-  // start the tween clock at the same reference
-  tweenUpdate(performance.now() / 1000);
+  // test hook: advance the simulation deterministically (used when the tab is hidden and rAF is paused)
+  (window as any).wonderland.tick = (seconds: number, render = false) => { const n = Math.round(seconds * 60); for (let i = 0; i < n; i++) step(1 / 60, render && i === n - 1); last = performance.now(); };
+  tweenUpdate(simTime);
   frame();
 }
 

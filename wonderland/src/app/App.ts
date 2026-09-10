@@ -251,8 +251,8 @@ export class App {
   /* ------------------------------------------------------------ frame */
   update(dt: number) {
     this.time += dt;
-    this.mode?.update?.(dt, this.time);
-    this.ride?.update?.(dt, this.time);
+    try { this.mode?.update?.(dt, this.time); this.ride?.update?.(dt, this.time); }
+    catch (e) { if (!(this as any)._loggedErr) { console.error("mode update failed", e); (this as any)._loggedErr = true; } }
     if (this.inHub) {
       const cam = this.r.camera;
       const v = new THREE.Vector3();
