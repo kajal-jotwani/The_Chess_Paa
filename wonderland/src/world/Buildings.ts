@@ -196,6 +196,8 @@ export function signage() {
   return g;
 }
 
+export const LAMP_SPOTS: [number, number][] = [[-4, 60], [4, 60], [-4, 40], [4, 40], [-4, 20], [4, 20], [18, 36], [-18, 36], [12, -6], [-8, -14], [26, -30], [-14, -40], [34, -56], [-38, -22], [-50, 0], [-6, -56], [24, 56], [-16, 56]];
+
 export function furniture() {
   const g = new THREE.Group();
   const benchGeo = merge([placed(new THREE.BoxGeometry(1.8, 0.08, 0.5), 0, 0.5, 0), placed(new THREE.BoxGeometry(1.8, 0.4, 0.08), 0, 0.8, -0.24), placed(new THREE.BoxGeometry(0.08, 0.5, 0.5), -0.8, 0.25, 0), placed(new THREE.BoxGeometry(0.08, 0.5, 0.5), 0.8, 0.25, 0)]);
@@ -208,8 +210,7 @@ export function furniture() {
   for (const [x, z, ry] of spots) {
     benches.push(new THREE.Matrix4().compose(new THREE.Vector3(x, heightAt(x, z), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(1, 1, 1)));
   }
-  const lampSpots: [number, number][] = [[-4, 60], [4, 60], [-4, 40], [4, 40], [-4, 20], [4, 20], [18, 36], [-18, 36], [12, -6], [-8, -14], [26, -30], [-14, -40], [34, -56], [-38, -22], [-50, 0], [-6, -56], [24, 56], [-16, 56]];
-  for (const [x, z] of lampSpots) {
+  for (const [x, z] of LAMP_SPOTS) {
     const y = heightAt(x, z);
     lamps.push(new THREE.Matrix4().setPosition(x, y, z));
     bulbs.push(new THREE.Matrix4().setPosition(x, y + 3.75, z));

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { waterNormals } from "./Textures";
 
 export interface PBRSet { map: THREE.Texture; normalMap: THREE.Texture; armMap: THREE.Texture; }
@@ -14,7 +15,7 @@ export interface Assets {
 
 const TEX_NAMES = ["grass", "sand", "wood_light", "wood_dark", "wood_frame", "bark", "castle", "cobble"] as const;
 
-export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (frac: number, label: string) => void): Promise<Assets> {
+export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (frac: number, label: string) => void, sky = "day"): Promise<Assets> {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const total = 5 + TEX_NAMES.length * 3 + 2;
   let done = 0;
@@ -22,6 +23,7 @@ export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (fra
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
   const gltf = new GLTFLoader();
+  gltf.setMeshoptDecoder(MeshoptDecoder);
   const texLoader = new THREE.TextureLoader();
   const loadTex = (url: string, srgb: boolean) => new Promise<THREE.Texture>((res, rej) => {
     texLoader.load(url, (t) => {
@@ -47,14 +49,9 @@ export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (fra
     return [name, { map, normalMap, armMap }] as const;
   }));
 
-  const hdrP = new RGBELoader().loadAsync(`${base}/hdr/sky.hdr`).then((hdr) => {
+  const hdrP = loadSky(renderer, sky).then((hdr) => {
     tick("sky");
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    pmrem.compileEquirectangularShader();
-    const envMap = pmrem.fromEquirectangular(hdr).texture;
-    pmrem.dispose();
-    hdr.mapping = THREE.EquirectangularReflectionMapping;
-    return { envMap, skyMap: hdr };
+    return hdr;
   });
 
   const waterP = Promise.resolve(waterNormals()).then((t) => { tick("water"); return t; });
@@ -79,4 +76,16 @@ export function pbr(set: PBRSet, opts: { repeat?: number | [number, number]; col
     normalScale: new THREE.Vector2(opts.normalScale ?? 1, opts.normalScale ?? 1), envMapIntensity: opts.envMapIntensity ?? 0.9,
   });
   return m;
+}
+
+/** Load one of the sky domes and prefilter it for reflections. */
+export async function loadSky(renderer: THREE.WebGLRenderer, name: string): Promise<{ envMap: THREE.Texture; skyMap: THREE.Texture }> {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const hdr = await new RGBELoader().loadAsync(`${base}/hdr/${name}.hdr`);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+  const envMap = pmrem.fromEquirectangular(hdr).texture;
+  pmrem.dispose();
+  hdr.mapping = THREE.EquirectangularReflectionMapping;
+  return { envMap, skyMap: hdr };
 }

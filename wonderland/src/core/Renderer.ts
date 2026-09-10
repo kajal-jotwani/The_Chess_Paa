@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { EffectComposer, RenderPass, EffectPass, BloomEffect, SMAAEffect, VignetteEffect, BlendFunction, KernelSize, SMAAPreset } from "postprocessing";
+import { EffectComposer, RenderPass, EffectPass, BloomEffect, SMAAEffect, VignetteEffect, BlendFunction, KernelSize, SMAAPreset, HueSaturationEffect, BrightnessContrastEffect } from "postprocessing";
 import { N8AOPostPass } from "n8ao";
 
 export type Quality = "low" | "medium" | "high";
@@ -17,6 +17,9 @@ export class Renderer {
   quality: Quality;
   private aoPass: N8AOPostPass | null = null;
   private bloom: BloomEffect | null = null;
+  private hueSat: HueSaturationEffect | null = null;
+  private bloomIntensity = 0.55;
+  private saturation = 0.12;
   private fpsSamples: number[] = [];
   private governorLocked = false;
   onQualityChange?: (q: Quality) => void;
@@ -68,15 +71,21 @@ export class Renderer {
     }
     const effects: any[] = [];
     if (q !== "low") {
-      this.bloom = new BloomEffect({ blendFunction: BlendFunction.ADD, mipmapBlur: true, luminanceThreshold: 0.92, luminanceSmoothing: 0.2, intensity: 0.55, radius: 0.6, kernelSize: KernelSize.MEDIUM });
+      this.bloom = new BloomEffect({ blendFunction: BlendFunction.ADD, mipmapBlur: true, luminanceThreshold: 0.92, luminanceSmoothing: 0.2, intensity: this.bloomIntensity, radius: 0.6, kernelSize: KernelSize.MEDIUM });
       effects.push(this.bloom);
     }
-    effects.push(new VignetteEffect({ eskil: false, offset: 0.28, darkness: 0.42 }));
+    this.hueSat = new HueSaturationEffect({ saturation: this.saturation });
+    effects.push(this.hueSat);
+    effects.push(new BrightnessContrastEffect({ brightness: 0.0, contrast: 0.07 }));
+    effects.push(new VignetteEffect({ eskil: false, offset: 0.3, darkness: 0.38 }));
     effects.push(new SMAAEffect({ preset: q === "high" ? SMAAPreset.HIGH : SMAAPreset.MEDIUM }));
     this.composer.addPass(new EffectPass(this.camera, ...effects));
     this.renderer.setPixelRatio(this.pixelRatioFor(q));
     this.renderer.shadowMap.needsUpdate = true;
   }
+
+  setBloom(intensity: number) { this.bloomIntensity = intensity; if (this.bloom) this.bloom.intensity = intensity; }
+  setSaturation(v: number) { this.saturation = v; if (this.hueSat) this.hueSat.saturation = v; }
 
   setQuality(q: Quality, lock = true) {
     if (q === this.quality) return;

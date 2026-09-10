@@ -13,6 +13,7 @@ export class UI {
   onHome?: () => void;
   onQuality?: () => void;
   onMute?: () => void;
+  onTheme?: (t: "dawn" | "day" | "dusk" | "night" | "cloudy" | "rain" | "rain_night" | "auto") => void;
   private base: string;
 
   constructor(base: string) {
@@ -24,6 +25,9 @@ export class UI {
         <div class="spacer"></div>
         <div class="pill" id="pill-stars">⭐ <span id="stars">0</span></div>
         <div class="pill" id="pill-tickets">🎟 <span id="tickets">0</span></div>
+        <div class="pill theme-pill" id="theme-pill" title="Time of day & weather">
+          <button data-t="auto" title="Match my time & weather">🕒</button><button data-t="dawn" title="Sunrise">🌅</button><button data-t="day" title="Sunny day">☀️</button><button data-t="dusk" title="Golden evening">🌇</button><button data-t="night" title="Starry night">🌙</button><button data-t="cloudy" title="Cloudy">⛅</button><button data-t="rain" title="Rain">🌧️</button>
+        </div>
         <button class="btn ghost icon-btn" id="btn-mute" title="Sound">🔊</button>
         <button class="btn ghost icon-btn" id="btn-quality" title="Graphics quality">✨</button>
         <button class="btn berry" id="btn-home">🏠 Park map</button>
@@ -42,6 +46,7 @@ export class UI {
     this.q("#btn-home").onclick = () => this.onHome?.();
     this.q("#btn-quality").onclick = () => this.onQuality?.();
     this.q("#btn-mute").onclick = () => this.onMute?.();
+    this.root.querySelectorAll<HTMLButtonElement>("#theme-pill button").forEach((b) => { b.onclick = () => this.onTheme?.(b.dataset.t as any); });
   }
   private q<T extends HTMLElement = HTMLElement>(sel: string): T { return this.root.querySelector(sel) as T; }
 
@@ -49,6 +54,9 @@ export class UI {
   setTickets(n: number) { this.q("#tickets").textContent = String(n); }
   setMuted(m: boolean) { this.q("#btn-mute").textContent = m ? "🔇" : "🔊"; }
   setQualityLabel(q: string) { this.q("#btn-quality").title = `Graphics: ${q} (click to change)`; }
+  setThemeLabel(theme: string, auto: boolean) {
+    this.root.querySelectorAll<HTMLButtonElement>("#theme-pill button").forEach((b) => { b.classList.toggle("on", b.dataset.t === (auto ? "auto" : theme) || (!auto && b.dataset.t === theme) || (auto && b.dataset.t === theme)); });
+  }
   showHome(show: boolean) { (this.q("#btn-home") as HTMLElement).style.display = show ? "" : "none"; }
 
   /** ChessPaa speaks; text types out. Returns roughly how long it takes to read. */

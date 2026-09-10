@@ -17,6 +17,8 @@ import { RideMode } from "../modes/RideMode";
 import { DriveMode } from "../modes/DriveMode";
 import { TACTIC_THEMES, ENDGAME_THEMES, tacticSet, endgameSet, rushSet } from "../modes/Puzzles";
 import { heightAt } from "../world/Ground";
+import { Atmosphere } from "../world/Atmosphere";
+import { detectTheme, THEME_META, ThemeId } from "../core/WeatherDetect";
 
 const GREETINGS = [
   "Welcome to my **Chess Wonderland**! Ride the coaster, spin the wheel, or come play a game with me.",
@@ -39,7 +41,7 @@ export class App {
   readonly ctx: ModeContext;
   private greeted = false;
 
-  constructor(readonly r: Renderer, readonly world: World, readonly rig: CameraRig, readonly assets: Assets) {
+  constructor(readonly r: Renderer, readonly world: World, readonly rig: CameraRig, readonly assets: Assets, readonly atmosphere: Atmosphere) {
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     this.ui = new UI(base);
     this.ui.setStars(this.progress.stars); this.ui.setTickets(this.progress.tickets);
@@ -48,6 +50,8 @@ export class App {
     this.ui.onMute = () => this.ui.setMuted(this.sound.toggle());
     this.ui.onQuality = () => { const order = ["low", "medium", "high"] as const; const q = order[(order.indexOf(r.quality) + 1) % 3]; r.setQuality(q); this.ui.setQualityLabel(q); this.ui.toast(`Graphics: ${q}`); };
     r.onQualityChange = (q) => this.ui.setQualityLabel(q);
+    this.ui.onTheme = (t) => this.setTheme(t, true);
+    this.ui.setThemeLabel(atmosphere.current ?? "day", localStorage.getItem("cw.theme") === null || localStorage.getItem("cw.theme") === "auto");
     for (const a of ATTRACTIONS) {
       const b = new Board3D(assets, world.pieceGeos, world.pieceMats, 0.6, world.pieceGeosLod);
       b.group.position.copy(a.board.pos).setY(heightAt(a.board.pos.x, a.board.pos.z));
@@ -59,10 +63,35 @@ export class App {
       this.sessions[a.id] = s;
     }
     this.ctx = { r, world, rig, ui: this.ui, sound: this.sound, engine: this.engine, progress: this.progress, boards: this.boards, session: (id) => this.sessions[id], exit: () => this.exitMode(), base };
-    this.engine.waitReady().then(() => console.log("Stockfish ready")).catch((e) => console.warn("Stockfish failed to start", e));
+    // the engine starts lazily on first use so the park loads faster; warm it after the intro
+    setTimeout(() => this.engine.waitReady().catch((e) => console.warn("Stockfish failed to start", e)), 6000);
   }
 
-  start() { this.goHub(true); }
+  /** Slow drift over the park behind the title card. */
+  preroll() {
+    this.ui.root.style.opacity = "0";
+    this.rig.lock();
+    this.rig.camera.position.set(-40, 26, 120);
+    this.rig.camera.lookAt(0, 6, -10);
+    this.prerolling = true;
+  }
+  private prerolling = false;
+  /** Manual pick (persisted) or auto from the clock + real weather. */
+  async setTheme(t: ThemeId | "auto", manual = false) {
+    if (manual) localStorage.setItem("cw.theme", t);
+    if (t === "auto") {
+      const { theme, source } = await detectTheme();
+      await this.atmosphere.apply(theme);
+      this.ui.setThemeLabel(theme, true);
+      this.ui.toast(`${THEME_META[theme].emoji} ${THEME_META[theme].name} — from your ${source.startsWith("weather") ? "local weather" : "clock"}`);
+      return;
+    }
+    await this.atmosphere.apply(t);
+    this.ui.setThemeLabel(t, false);
+    this.ui.toast(`${THEME_META[t].emoji} ${THEME_META[t].name}`);
+  }
+  start() { this.prerolling = false;
+    if ((localStorage.getItem("cw.theme") ?? "auto") === "auto") setTimeout(() => this.setTheme("auto"), 2500); this.ui.root.style.transition = "opacity .8s"; this.ui.root.style.opacity = "1"; this.sound.click(); this.goHub(true); }
 
   /* ------------------------------------------------------------ hub */
   goHub(first = false) {
@@ -253,6 +282,7 @@ export class App {
   /* ------------------------------------------------------------ frame */
   update(dt: number) {
     this.time += dt;
+    if (this.prerolling) { const c = this.rig.camera; c.position.x += dt * 1.6; c.position.z -= dt * 0.4; c.lookAt(0, 6, -10); }
     try { this.mode?.update?.(dt, this.time); this.ride?.update?.(dt, this.time); }
     catch (e) { if (!(this as any)._loggedErr) { console.error("mode update failed", e); (this as any)._loggedErr = true; } }
     if (this.inHub) {

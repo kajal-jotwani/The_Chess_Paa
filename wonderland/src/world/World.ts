@@ -6,11 +6,12 @@ import { FerrisWheel } from "./FerrisWheel";
 import { Train } from "./Train";
 import { Carousel } from "./Carousel";
 import { castle, bigTop, umbrella, shops, gate, signage, furniture } from "./Buildings";
-import { trees, shrubsAndFlowers, Sky3D, bunting, defaultAvoid } from "./Nature";
+import { trees, shrubsAndFlowers, Sky3D, bunting, defaultAvoid, grassTufts, sunSprite } from "./Nature";
 import { FolkFactory, Folk, ChessPaa, Kid } from "./Characters";
 import { PARK, ATTRACTIONS, pathNetwork, byId, AttractionId } from "./Layout";
 import { pieceMaterials, pieceGeometries, PieceMaterials } from "../chess/Materials";
 import { paving, Fountain, fencesAndHedges, Birds } from "./Details";
+import { SwanBoats, parkProps, rideArches } from "./Props";
 
 interface Wanderer { folk: Folk; path: THREE.Vector3[]; seg: number; t: number; speed: number; }
 
@@ -18,6 +19,10 @@ interface Wanderer { folk: Folk; path: THREE.Vector3[]; seg: number; t: number; 
 export class World {
   readonly group = new THREE.Group();
   readonly sun: THREE.DirectionalLight;
+  readonly hemi: THREE.HemisphereLight;
+  readonly sunGlow: THREE.Sprite;
+  readonly wetMaterials: THREE.MeshStandardMaterial[] = [];
+  readonly lampSpots: THREE.Vector3[] = [];
   readonly coaster: Coaster;
   readonly ferris: FerrisWheel;
   readonly train: Train;
@@ -32,6 +37,7 @@ export class World {
   private sky3d: Sky3D;
   private fountain: Fountain;
   private birds: Birds;
+  private swans: SwanBoats;
   private wanderers: Wanderer[] = [];
   private time = 0;
   private shadowTarget = new THREE.Object3D();
@@ -39,12 +45,14 @@ export class World {
   constructor(readonly scene: THREE.Scene, readonly assets: Assets) {
     scene.background = assets.skyMap;
     scene.environment = assets.envMap;
-    scene.environmentIntensity = 0.85;
+    scene.environmentIntensity = 0.75;
     scene.backgroundIntensity = 1.0;
+    scene.backgroundRotation = new THREE.Euler(0, -0.9, 0);
+    scene.environmentRotation = new THREE.Euler(0, -0.9, 0);
     scene.fog = new THREE.Fog(0xdceeff, 220, 620);
 
-    this.sun = new THREE.DirectionalLight(0xfff1dc, 3.8);
-    this.sun.position.set(90, 120, 60);
+    this.sun = new THREE.DirectionalLight(0xffe2bd, 3.6);
+    this.sun.position.set(90, 70, 60);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0006;
@@ -53,8 +61,16 @@ export class World {
     this.sun.shadow.camera.far = 400;
     this.sun.target = this.shadowTarget;
     scene.add(this.sun, this.shadowTarget);
-    const hemi = new THREE.HemisphereLight(0xbfe3ff, 0xc9b28a, 0.35);
+    const hemi = new THREE.HemisphereLight(0xcfe6ff, 0xd9c39a, 0.4);
     scene.add(hemi);
+    this.hemi = hemi;
+    const glowS = sunSprite();
+    this.sunGlow = glowS;
+    glowS.position.set(90, 70, 60).normalize().multiplyScalar(420);
+    (glowS.material as THREE.SpriteMaterial).opacity = 0.9;
+    (glowS.material as THREE.SpriteMaterial).blending = THREE.AdditiveBlending;
+    glowS.scale.set(120, 120, 1);
+    scene.add(glowS);
     this.setShadowFocus(new THREE.Vector3(0, 0, -10), 120);
 
     this.pieceMats = pieceMaterials(assets);
@@ -64,6 +80,7 @@ export class World {
 
     this.ground = buildGround(assets);
     this.group.add(this.ground.group);
+    this.ground.group.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (m && o.name === "terrain") this.wetMaterials.push(m); });
     this.coaster = new Coaster(this.folkFactory);
     this.group.add(this.coaster.group);
     this.ferris = new FerrisWheel(PARK.ferris);
@@ -73,15 +90,21 @@ export class World {
     const knight = new THREE.Mesh(this.pieceGeosLod.knight);
     this.carousel = new Carousel(PARK.carousel, knight, this.pieceMats.white, this.pieceMats.black);
     this.group.add(this.carousel.group);
-    this.group.add(castle(assets), bigTop(), umbrella(PARK.umbrella), shops(), gate(), signage(), furniture(), paving(assets), fencesAndHedges());
+    const pav = paving(assets);
+    pav.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (m && m.map && !this.wetMaterials.includes(m)) this.wetMaterials.push(m); });
+    this.group.add(castle(assets), bigTop(), umbrella(PARK.umbrella), shops(), gate(), signage(), furniture(), pav, fencesAndHedges());
+    for (const a of ATTRACTIONS) this.lampSpots.push(a.board.pos.clone().add(new THREE.Vector3(0, 4.5, 0)));
+    for (const [x, z] of [[-4, 40], [4, 20], [18, 36]]) this.lampSpots.push(new THREE.Vector3(x, heightAt(x, z) + 3.6, z));
     this.fountain = new Fountain(new THREE.Vector3(0, 0, 36));
     this.group.add(this.fountain.group);
     this.birds = new Birds();
     this.group.add(this.birds.group);
+    this.swans = new SwanBoats();
+    this.group.add(this.swans.group, parkProps(), rideArches());
 
     const track = this.coaster.frames.filter((_, i) => i % 6 === 0).map((f) => f.p);
     const avoid = defaultAvoid((x, z) => { for (const p of track) if (Math.hypot(x - p.x, z - p.z) < 3.2) return true; return false; });
-    this.group.add(trees(assets, avoid), shrubsAndFlowers(avoid));
+    this.group.add(trees(assets, avoid), shrubsAndFlowers(avoid), grassTufts(avoid));
     this.sky3d = new Sky3D();
     this.group.add(this.sky3d.group);
     const P = (x: number, z: number, h = 3.2) => new THREE.Vector3(x, heightAt(x, z) + h, z);
@@ -132,7 +155,7 @@ export class World {
   /** Tighten the sun's shadow frustum around what the camera is looking at. */
   setShadowFocus(center: THREE.Vector3, size: number) {
     this.shadowTarget.position.copy(center);
-    this.sun.position.copy(center).add(new THREE.Vector3(90, 120, 60));
+    this.sun.position.copy(center).add(new THREE.Vector3(90, 70, 60));
     const c = this.sun.shadow.camera;
     c.left = -size / 2; c.right = size / 2; c.top = size / 2; c.bottom = -size / 2;
     c.updateProjectionMatrix();
@@ -150,6 +173,7 @@ export class World {
     this.sky3d.update(dt, t);
     this.fountain.update(dt);
     this.birds.update(dt);
+    this.swans.update(dt);
     this.chessPaa.update(dt, t);
     for (const k of this.kids) k.update(dt, t);
     for (const w of this.wanderers) {

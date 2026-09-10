@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Assets, pbr } from "../core/Assets";
-import { cloud, glow, leafCluster } from "../core/Textures";
+import { cloud, glow, leafCluster, grassBlades } from "../core/Textures";
 import { instanced, merge, placed, rnd } from "./Geo";
 import { heightAt } from "./Ground";
 import { PARK, pathNetwork, ATTRACTIONS } from "./Layout";
@@ -232,4 +232,27 @@ export function sunSprite() {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow("#fff5c8"), transparent: true, depthWrite: false, opacity: 0.0 }));
   s.scale.set(60, 60, 1);
   return s;
+}
+
+/** Instanced grass tufts scattered over the lawns (never on paths or plazas). */
+export function grassTufts(avoid: AvoidFn, count = 2600) {
+  const rand = rnd(2024);
+  const card = merge([new THREE.PlaneGeometry(0.9, 0.7).translate(0, 0.35, 0), new THREE.PlaneGeometry(0.9, 0.7).translate(0, 0.35, 0).rotateY(Math.PI / 2)]);
+  const mat = new THREE.MeshStandardMaterial({ map: grassBlades(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1, metalness: 0, color: 0xffffff });
+  const mats: THREE.Matrix4[] = [], cols: THREE.Color[] = [];
+  let tries = 0;
+  while (mats.length < count && tries++ < count * 6) {
+    const a = rand() * Math.PI * 2, r = 20 + Math.sqrt(rand()) * 95;
+    const x = Math.cos(a) * r, z = 6 + Math.sin(a) * r * 0.9;
+    if (Math.hypot(x, z - 8) < 34) continue;
+    if (nearPath(x, z, 4.2)) continue;
+    if (avoid(x, z)) continue;
+    const s = 0.7 + rand() * 0.8;
+    mats.push(new THREE.Matrix4().compose(new THREE.Vector3(x, heightAt(x, z), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI), new THREE.Vector3(s, s * (0.8 + rand() * 0.5), s)));
+    cols.push(new THREE.Color().setHSL(0.25 + rand() * 0.06, 0.5, 0.55 + rand() * 0.2));
+  }
+  const m = instanced(card, mat, mats, cols);
+  m.castShadow = false;
+  m.name = "grassTufts";
+  return m;
 }

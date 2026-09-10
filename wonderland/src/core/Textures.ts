@@ -208,3 +208,22 @@ export function leafCluster(hue = 0.3, size = 256) {
   });
 }
 function rnd(seed: number) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+/** A clump of grass blades with alpha, for instanced tufts on the lawns. */
+export function grassBlades(size = 128) {
+  return memo("grassBlades", () => {
+    const [c, ctx] = canvas(size, size);
+    ctx.clearRect(0, 0, size, size);
+    const r = rnd(99);
+    for (let i = 0; i < 26; i++) {
+      const x0 = size * (0.2 + r() * 0.6), h = size * (0.45 + r() * 0.5), lean = (r() - 0.5) * size * 0.5, w = 2 + r() * 3;
+      const l = 30 + r() * 25;
+      ctx.strokeStyle = `hsl(${95 + r() * 30}, ${45 + r() * 30}%, ${l}%)`;
+      ctx.lineWidth = w; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x0, size); ctx.quadraticCurveTo(x0 + lean * 0.3, size - h * 0.6, x0 + lean, size - h); ctx.stroke();
+    }
+    const t = toTexture(c, true, false);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return t;
+  });
+}

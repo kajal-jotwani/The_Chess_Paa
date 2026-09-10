@@ -46,18 +46,16 @@ export function buildGround(assets: Assets) {
   const mask = groundMask(SIZE, 1024, (ctx, toPx, scale) => {
     ctx.save();
     ctx.filter = "blur(10px)";
-    // the park plaza
+    // the central plaza and a gravel apron around each attraction
     ctx.fillStyle = "#fff";
-    const [cx, cz] = toPx(0, -6);
-    ctx.beginPath(); ctx.ellipse(cx, cz, PARK.sandRadius * scale, PARK.sandRadius * 0.86 * scale, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    // grass islands inside the plaza for trees and lawns
-    ctx.save(); ctx.filter = "blur(8px)"; ctx.fillStyle = "#000";
-    const lawns: [number, number, number, number][] = [[-30, -30, 14, 10], [34, 8, 10, 12], [-70, 30, 10, 8], [60, -10, 9, 14], [-10, -30, 8, 6], [20, -60, 8, 6], [-40, 52, 9, 6]];
-    for (const [x, z, rx, rz] of lawns) { const [px, pz] = toPx(x, z); ctx.beginPath(); ctx.ellipse(px, pz, rx * scale, rz * scale, 0, 0, Math.PI * 2); ctx.fill(); }
+    const [cx, cz] = toPx(0, 8);
+    ctx.beginPath(); ctx.ellipse(cx, cz, 34 * scale, 30 * scale, 0, 0, Math.PI * 2); ctx.fill();
+    for (const [x, z, r] of [[44, -66, 15], [28, 48, 15], [-16, -64, 15], [-44, 4, 15], [-24, 40, 13], [26, -28, 16], [44, -86, 20], [-16, -92, 16], [-52, -10, 12], [0, 66, 18]]) {
+      const [px, pz] = toPx(x, z); ctx.beginPath(); ctx.ellipse(px, pz, r * scale, r * 0.9 * scale, 0, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
     // walkways: bright sand
-    ctx.save(); ctx.filter = "blur(3px)"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 5 * scale; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.save(); ctx.filter = "blur(3px)"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 6 * scale; ctx.lineCap = "round"; ctx.lineJoin = "round";
     for (const path of pathNetwork()) {
       ctx.beginPath();
       path.forEach((v, i) => { const [px, pz] = toPx(v.x, v.z); if (i === 0) ctx.moveTo(px, pz); else ctx.lineTo(px, pz); });
@@ -76,9 +74,9 @@ export function buildGround(assets: Assets) {
     shader.uniforms.sandNormal = { value: sandNor };
     shader.uniforms.sandArm = { value: sandArm };
     shader.uniforms.maskMap = { value: mask };
-    shader.uniforms.sandScale = { value: 0.62 };
-    shader.uniforms.sandTint = { value: new THREE.Color(1.55, 1.22, 0.78) };
-    shader.uniforms.grassTint = { value: new THREE.Color(1.05, 1.28, 0.72) };
+    shader.uniforms.sandScale = { value: 0.9 };
+    shader.uniforms.sandTint = { value: new THREE.Color(1.75, 1.5, 1.12) };
+    shader.uniforms.grassTint = { value: new THREE.Color(0.98, 1.22, 0.66) };
     shader.uniforms.worldSize = { value: SIZE };
     shader.uniforms.macroMap = { value: macroNoise() };
     shader.vertexShader = shader.vertexShader

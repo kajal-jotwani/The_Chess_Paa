@@ -16,7 +16,16 @@ TEXTURES = {
     "castle":     ("castle_brick_02_white", "1k"),
     "cobble":     ("cobblestone_floor_04", "1k"),
 }
-HDRI = ("kloofendal_48d_partly_cloudy_puresky", "2k")
+HDRI = ("kloofendal_48d_partly_cloudy_puresky", "1k")
+SKIES = {  # time-of-day / weather skies (all "puresky" domes, 1k)
+    "day": "kloofendal_48d_partly_cloudy_puresky",
+    "dawn": "kloppenheim_06_puresky",
+    "dusk": "belfast_sunset_puresky",
+    "night": "kloppenheim_02_puresky",
+    "cloudy": "kloofendal_overcast_puresky",
+    "rain": "overcast_soil_puresky",
+    "rain_night": "kloppenheim_07_puresky",
+}
 
 WANT = {"diff": ["diffuse", "diff", "col"], "nor": ["nor_gl"], "rough": ["rough"], "arm": ["arm"], "ao": ["ao"]}
 
@@ -72,10 +81,11 @@ def main():
             got.append(slot)
         if not got:
             print("NOTHING for", asset, list(files.keys()))
-    files = get_json(API + HDRI[0])
-    url = files["hdri"][HDRI[1]]["hdr"]["url"]
-    dest = os.path.join(ROOT, "hdr", "sky.hdr")
-    print("hdr/sky.hdr <-", HDRI[0], download(url, dest))
+    for local, asset in SKIES.items():
+        files = get_json(API + asset)
+        url = files["hdri"]["1k"]["hdr"]["url"]
+        dest = os.path.join(ROOT, "hdr", f"{local}.hdr")
+        print(f"hdr/{local}.hdr <-", asset, download(url, dest))
 
 
 if __name__ == "__main__":

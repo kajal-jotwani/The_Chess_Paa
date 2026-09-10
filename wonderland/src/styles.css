@@ -118,3 +118,21 @@ button { font-family: var(--font); cursor: pointer; }
   .brand { font-size: 17px; }
   .brand small { display: none; }
 }
+
+/* ---------- intro ---------- */
+#intro { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 60%, rgba(20,10,40,0) 0%, rgba(20,10,40,.55) 100%); transition: opacity .8s ease; }
+#intro.hidden { opacity: 0; pointer-events: none; }
+.intro-card { text-align: center; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,.25), 0 12px 40px rgba(0,0,0,.35); animation: rise 1.2s cubic-bezier(.2,.9,.3,1.1); }
+@keyframes rise { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+.intro-kicker { font-family: var(--font-title); font-weight: 700; letter-spacing: 4px; text-transform: uppercase; font-size: 14px; opacity: .9; }
+.intro-title { font-family: var(--font-title); font-weight: 800; font-size: clamp(56px, 9vw, 120px); line-height: .92; margin: 8px 0 14px; }
+.intro-title span { color: var(--sun); }
+.intro-sub { font-size: clamp(15px, 1.6vw, 20px); line-height: 1.5; opacity: .95; margin-bottom: 26px; }
+.intro-btn { font-size: 22px; padding: 16px 34px; }
+.intro-hint { margin-top: 18px; font-size: 13px; opacity: .8; }
+
+.theme-pill { padding: 4px 6px; gap: 2px; }
+.theme-pill button { border: 0; background: transparent; font-size: 17px; width: 32px; height: 32px; border-radius: 50%; opacity: .55; transition: transform .1s, opacity .1s; }
+.theme-pill button:hover { transform: scale(1.15); opacity: 1; }
+.theme-pill button.on { opacity: 1; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+@media (max-width: 900px) { .theme-pill { display: none; } }

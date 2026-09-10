@@ -6,6 +6,8 @@ import { World } from "./world/World";
 import { CameraRig } from "./app/CameraRig";
 import { App } from "./app/App";
 import { tweenUpdate } from "./core/Tween";
+import { themeFromClock } from "./core/WeatherDetect";
+import { Atmosphere } from "./world/Atmosphere";
 
 const TIPS = [
   "Warming up the roller coaster…", "Polishing the knights…", "Filling the balloons…", "ChessPaa is finding his monocle…",
@@ -20,16 +22,23 @@ async function boot() {
   const tipTimer = setInterval(() => { tip.textContent = TIPS[++tipIdx % TIPS.length]; }, 1400);
 
   const r = new Renderer(canvas);
-  const assets = await loadAssets(r.renderer, (frac) => { fill.style.width = `${Math.round(frac * 100)}%`; });
+  const saved = localStorage.getItem("cw.theme");
+  const theme = (saved && saved !== "auto" ? saved : themeFromClock()) as any;
+  const assets = await loadAssets(r.renderer, (frac) => { fill.style.width = `${Math.round(frac * 100)}%`; }, theme);
   const world = new World(r.scene, assets);
   const rig = new CameraRig(r.camera, canvas);
-  const app = new App(r, world, rig, assets);
+  const atmosphere = new Atmosphere({ scene: r.scene, sun: world.sun, hemi: world.hemi, sunGlow: world.sunGlow, renderer: r.renderer, setBloom: (v) => r.setBloom(v), setSaturation: (v) => r.setSaturation(v), worldGroup: world.group, wetMaterials: world.wetMaterials, lampSpots: world.lampSpots });
+  await atmosphere.apply(theme, true);
+  const app = new App(r, world, rig, assets, atmosphere);
   (window as any).wonderland = { app, world, rig, renderer: r };
   clearInterval(tipTimer);
   // warm the shaders before revealing (avoids a hitch on first frame)
   r.renderer.compile(r.scene, r.camera);
   document.getElementById("loader")!.classList.add("hidden");
-  app.start();
+  const intro = document.getElementById("intro")!;
+  intro.classList.remove("hidden");
+  app.preroll();
+  document.getElementById("intro-enter")!.onclick = () => { intro.classList.add("hidden"); app.start(); };
 
   let last = performance.now();
   let simTime = last / 1000;
@@ -38,6 +47,7 @@ async function boot() {
     tweenUpdate(simTime);
     world.update(dt);
     app.update(dt);
+    atmosphere.update(dt, r.camera);
     rig.update(dt);
     if (render) r.render(dt);
   };
