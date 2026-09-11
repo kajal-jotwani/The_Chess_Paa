@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>ChessPaa's Chess Wonderland</title>
+    <meta name="description" content="A 3D theme park where ChessPaa teaches children chess — ride the coaster, spin the Ferris wheel, board the puzzle train." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="ui"></div>
+    <div id="intro" class="hidden">
+      <div class="intro-card">
+        <div class="intro-kicker">ChessPaa presents</div>
+        <div class="intro-title">Chess<br/><span>Wonderland</span></div>
+        <div class="intro-sub">A theme park where a grandfather teaches chess.<br/>Ride the coaster · learn every piece · play a real game.</div>
+        <button class="btn berry intro-btn" id="intro-enter">🎟 Enter the park</button>
+        <div class="intro-hint">Click to explore · drag to look around · scroll to zoom</div>
+      </div>
+    </div>
+    <div id="loader">
+      <div class="loader-card">
+        <div class="loader-title">ChessPaa's<br/><span>Chess Wonderland</span></div>
+        <div class="loader-bar"><div class="loader-fill" id="loader-fill"></div></div>
+        <div class="loader-tip" id="loader-tip">Warming up the roller coaster…</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,145 @@
+import * as THREE from "three";
+import { Assets, pbr } from "../core/Assets";
+import { groundMask, macroNoise } from "../core/Textures";
+import { PARK, pathNetwork } from "./Layout";
+
+const SIZE = 520;
+
+/**
+ * One draw call of terrain: grass everywhere, blended to warm sand inside the
+ * park and along the walkways using a mask painted at boot.  The lake sits in
+ * a dip carved by the same height function that raises the distant hills.
+ */
+export function heightAt(x: number, z: number) {
+  const d = Math.hypot(x, z);
+  let h = 0;
+  if (d > 120) {
+    const k = (d - 120) / 140;
+    h += k * k * 14 * (0.7 + 0.3 * Math.sin(x * 0.05) * Math.cos(z * 0.04));
+    // a second, shorter octave gives the ridge some character; scaled by k*k so
+    // the terrain never dips below zero outside the lake (base minimum is 9.8*k*k)
+    h += k * k * 7 * Math.sin(x * 0.11 + z * 0.07) * Math.cos(z * 0.13 - x * 0.05);
+  }
+  const L = PARK.lake;
+  const e = Math.hypot((x - L.center.x) / L.rx, (z - L.center.z) / L.rz);
+  if (e < 1.15) {
+    const k = THREE.MathUtils.smoothstep(1.15 - e, 0, 0.35);
+    h -= k * 2.2;
+  }
+  return h;
+}
+
+export function buildGround(assets: Assets) {
+  const group = new THREE.Group();
+  group.name = "ground";
+  const segs = 180;
+  const geo = new THREE.PlaneGeometry(SIZE, SIZE, segs, segs);
+  geo.rotateX(-Math.PI / 2);
+  const p = geo.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) p.setY(i, heightAt(p.getX(i), p.getZ(i)));
+  geo.computeVertexNormals();
+  geo.setAttribute("uv2", geo.attributes.uv);
+
+  const mat = pbr(assets.tex.grass, { repeat: SIZE / 4.5, color: 0xffffff, roughness: 1, metalness: 0, normalScale: 0.7, envMapIntensity: 0.45 });
+  const sand = assets.tex.sand;
+  const sandMap = sand.map.clone(); sandMap.needsUpdate = true;
+  const sandNor = sand.normalMap.clone(); sandNor.needsUpdate = true;
+  const sandArm = sand.armMap.clone(); sandArm.needsUpdate = true;
+
+  const mask = groundMask(SIZE, 1024, (ctx, toPx, scale) => {
+    ctx.save();
+    ctx.filter = "blur(10px)";
+    // the central plaza and a gravel apron around each attraction
+    ctx.fillStyle = "#fff";
+    const [cx, cz] = toPx(0, 8);
+    ctx.beginPath(); ctx.ellipse(cx, cz, 34 * scale, 30 * scale, 0, 0, Math.PI * 2); ctx.fill();
+    for (const [x, z, r] of [[44, -66, 15], [28, 48, 15], [-16, -64, 15], [-44, 4, 15], [-24, 40, 13], [26, -28, 16], [44, -92, 20], [-16, -92, 16], [-51, 26, 12], [-67, -8, 10], [0, 66, 18], [0, 36, 10]]) {
+      const [px, pz] = toPx(x, z); ctx.beginPath(); ctx.ellipse(px, pz, r * scale, r * 0.9 * scale, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    // walkways: bright sand
+    ctx.save(); ctx.filter = "blur(3px)"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 6 * scale; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (const path of pathNetwork()) {
+      ctx.beginPath();
+      path.forEach((v, i) => { const [px, pz] = toPx(v.x, v.z); if (i === 0) ctx.moveTo(px, pz); else ctx.lineTo(px, pz); });
+      ctx.stroke();
+    }
+    ctx.restore();
+    // lake bed: keep sandy
+    ctx.save(); ctx.fillStyle = "#fff"; ctx.filter = "blur(6px)";
+    const [lx, lz] = toPx(PARK.lake.center.x, PARK.lake.center.z);
+    ctx.beginPath(); ctx.ellipse(lx, lz, PARK.lake.rx * 1.2 * scale, PARK.lake.rz * 1.2 * scale, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.sandMap = { value: sandMap };
+    shader.uniforms.sandNormal = { value: sandNor };
+    shader.uniforms.sandArm = { value: sandArm };
+    shader.uniforms.maskMap = { value: mask };
+    shader.uniforms.sandScale = { value: 0.9 };
+    // both photo textures are brown-leaning: the sand is desaturated in the shader
+    // before a blue-leaning tint turns it into warm limestone grey, and the grass
+    // gets a strong green push (G/R ~ 1.45) so the lawn reads as lawn, not khaki
+    shader.uniforms.sandTint = { value: new THREE.Color(1.55, 1.6, 1.7) };
+    shader.uniforms.grassTint = { value: new THREE.Color(0.52, 1.02, 0.48) };
+    shader.uniforms.worldSize = { value: SIZE };
+    shader.uniforms.macroMap = { value: macroNoise() };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vWorldXZ; varying float vWorldY;")
+      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvec4 gWorld = modelMatrix * vec4(transformed, 1.0); vWorldXZ = gWorld.xz; vWorldY = gWorld.y;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>
+        varying vec2 vWorldXZ; varying float vWorldY;
+        uniform sampler2D sandMap; uniform sampler2D sandNormal; uniform sampler2D sandArm; uniform sampler2D maskMap;
+        uniform float sandScale; uniform vec3 sandTint; uniform vec3 grassTint; uniform float worldSize; uniform sampler2D macroMap;
+        float groundMix() { return texture2D(maskMap, vWorldXZ / worldSize + 0.5).r; }`)
+      .replace("#include <map_fragment>", `
+        float gm = groundMix();
+        vec4 gTex = texture2D(map, vMapUv);
+        vec4 sTex = texture2D(sandMap, vMapUv * sandScale);
+        vec3 g = gTex.rgb * grassTint;
+        float gl = dot(g, vec3(0.3, 0.59, 0.11)); g = mix(vec3(gl), g, 1.2);
+        float sl = dot(sTex.rgb, vec3(0.3, 0.59, 0.11));
+        vec3 s = mix(vec3(sl), sTex.rgb, 0.35) * sandTint;
+        vec3 col = mix(g, s, gm);
+        float macro = texture2D(macroMap, vWorldXZ / 70.0).r;
+        col *= 0.90 + 0.20 * macro;
+        // distant hills: cooler, duller green so they recede behind the park
+        float hill = smoothstep(2.0, 12.0, vWorldY);
+        col = mix(col, col * vec3(0.62, 0.80, 0.60), hill);
+        diffuseColor.rgb *= col;`)
+      .replace("vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;", `
+        vec3 mapN = mix(texture2D( normalMap, vNormalMapUv ).xyz, texture2D( sandNormal, vNormalMapUv * sandScale ).xyz, groundMix()) * 2.0 - 1.0;`)
+      .replace("vec4 texelRoughness = texture2D( roughnessMap, vRoughnessMapUv );", `
+        vec4 texelRoughness = mix(texture2D( roughnessMap, vRoughnessMapUv ), texture2D( sandArm, vRoughnessMapUv * sandScale ), groundMix());`)
+      .replace("float ambientOcclusion = ( texture2D( aoMap, vAoMapUv ).r - 1.0 ) * aoMapIntensity + 1.0;", `
+        float ambientOcclusion = ( mix(texture2D( aoMap, vAoMapUv ).r, texture2D( sandArm, vAoMapUv * sandScale ).r, groundMix()) - 1.0 ) * aoMapIntensity + 1.0;`);
+  };
+  mat.customProgramCacheKey = () => "ground-blend";
+  const ground = new THREE.Mesh(geo, mat);
+  ground.receiveShadow = true;
+  ground.name = "terrain";
+  group.add(ground);
+
+  // lake water
+  const L = PARK.lake;
+  const waterGeo = new THREE.CircleGeometry(1, 64).scale(L.rx * 1.02, L.rz * 1.02, 1);
+  waterGeo.rotateX(-Math.PI / 2);
+  const n1 = assets.waterNormals.clone(); n1.needsUpdate = true; n1.repeat.set(6, 6);
+  const water = new THREE.Mesh(waterGeo, new THREE.MeshPhysicalMaterial({
+    color: 0x2e8ec4, roughness: 0.06, metalness: 0.0, transparent: true, opacity: 0.86, normalMap: n1, normalScale: new THREE.Vector2(0.55, 0.55),
+    envMapIntensity: 1.4, clearcoat: 1, clearcoatRoughness: 0.05, side: THREE.FrontSide,
+  }));
+  water.position.set(L.center.x, -0.35, L.center.z);
+  water.receiveShadow = true;
+  water.name = "water";
+  group.add(water);
+
+  return {
+    group,
+    update(dt: number, t: number) {
+      n1.offset.x = t * 0.012; n1.offset.y = t * 0.008;
+    },
+  };
+}
