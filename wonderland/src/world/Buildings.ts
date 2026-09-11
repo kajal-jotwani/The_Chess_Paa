@@ -11,13 +11,25 @@ export function castle(assets: Assets) {
   const g = new THREE.Group();
   const brick = pbr(assets.tex.castle, { repeat: [3, 2], roughness: 1, metalness: 0, color: 0xf6f1e8 });
   const brickTower = pbr(assets.tex.castle, { repeat: [3, 3], roughness: 1, metalness: 0, color: 0xf6f1e8 });
-  const roofBlue = std(0x4f7fd6, 0.5), roofPurple = std(0x8e5bd6, 0.5), goldM = std(0xffd23c, 0.3, 0.6);
-  const winMat = std(0x2a3550, 0.4, 0.2);
+  // the brick photo is dark Victorian red-brown and a multiplicative tint can only darken it;
+  // lift + partly desaturate in the shader so the icon reads as pale storybook limestone
+  // with the mortar lines intact, and the blue roofs and gold finials pop against it
+  const stone = (m: THREE.MeshStandardMaterial) => {
+    m.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
+      { float l = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(l), diffuseColor.rgb, 0.45) * vec3(1.9, 1.75, 1.6); diffuseColor.rgb = min(diffuseColor.rgb, vec3(0.92)); }`);
+    };
+    m.customProgramCacheKey = () => "castle-stone";
+  };
+  stone(brick); stone(brickTower);
+  const roofBlue = std(0x3f6fc9, 0.5), roofPurple = std(0x7d55c4, 0.5), goldM = std(0xffd23c, 0.3, 0.6);
+  const winMat = new THREE.MeshStandardMaterial({ color: 0x2a3550, roughness: 0.4, metalness: 0.2, emissive: 0xffb45c, emissiveIntensity: 0 });
+  winMat.userData.window = true; // Atmosphere lights windows with the lamps: dark by day, warm at night
   const winGeo = new THREE.BoxGeometry(0.7, 1.2, 0.2);
   const wins: THREE.Matrix4[] = [];
   const tower = (x: number, z: number, r: number, h: number, roofH: number, roof: THREE.Material) => {
     const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.08, h, 20), brickTower); t.position.set(x, h / 2, z);
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.25, r * 1.05, 0.8, 20), std(0xe9dfcf, 0.9)); ring.position.set(x, h, z);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.25, r * 1.05, 0.8, 20), std(0xf4ece0, 0.9)); ring.position.set(x, h, z);
     const rf = new THREE.Mesh(new THREE.ConeGeometry(r * 1.3, roofH, 20), roof); rf.position.set(x, h + roofH / 2 + 0.3, z);
     const tip = new THREE.Mesh(new THREE.SphereGeometry(r * 0.22, 10, 8), goldM); tip.position.set(x, h + roofH + 0.4, z);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.2, 6), goldM); pole.position.set(x, h + roofH + 1.4, z);
@@ -77,6 +89,12 @@ export function bigTop() {
   s.position.set(0, 6.4, 11.6);
   g.add(wall, roof, pole, flag, awning, s);
   shadowed(g);
+  // eave lights just outside and below the roof rim (base r 12.5 at y 5.0), brightened at night by Atmosphere
+  const bulbs: THREE.Matrix4[] = [];
+  for (let i = 0; i < 36; i++) { const a = (i / 36) * Math.PI * 2; bulbs.push(new THREE.Matrix4().setPosition(Math.cos(a) * 12.8, 4.85, Math.sin(a) * 12.8)); }
+  const lights = instanced(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshStandardMaterial({ color: 0xfff3c4, emissive: 0xffd36b, emissiveIntensity: 2.2 }), bulbs);
+  lights.castShadow = false;
+  g.add(lights);
   g.position.copy(PARK.bigTop);
   g.name = "bigtop";
   return g;
@@ -106,7 +124,9 @@ export function shops() {
   const body = new THREE.Mesh(new THREE.BoxGeometry(6.5, 4.5, 5.5), std(0x6fb3e0, 0.75)); body.position.y = 2.25;
   const roof = new THREE.Mesh(new THREE.ConeGeometry(5.6, 3, 4), std(0x2f6fa8, 0.7)); roof.position.y = 6; roof.rotation.y = Math.PI / 4;
   const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.4, 0.2), wood); door.position.set(0, 1.2, 2.8);
-  const win = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.2), new THREE.MeshPhysicalMaterial({ color: 0xcdefff, roughness: 0.05, transparent: true, opacity: 0.7 }));
+  const clubWin = new THREE.MeshPhysicalMaterial({ color: 0xcdefff, roughness: 0.05, transparent: true, opacity: 0.7, emissive: 0xffb45c, emissiveIntensity: 0 });
+  clubWin.userData.window = true;
+  const win = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.2), clubWin);
   const w1 = win.clone(); w1.position.set(-2, 2.6, 2.8); const w2 = win.clone(); w2.position.set(2, 2.6, 2.8);
   const s = new THREE.Mesh(new THREE.PlaneGeometry(4, 1.2), new THREE.MeshBasicMaterial({ map: sign("CHESS CLUB", { bg: "#fff3d6", fg: "#2f6fa8", border: "#2f6fa8", w: 1200, h: 340 }), transparent: true })); s.position.set(0, 4.0, 2.9);
   club.add(body, roof, door, w1, w2, s);
@@ -139,7 +159,9 @@ export function shops() {
   const booth = new THREE.Group();
   const bb = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.8, 2.4), std(0xe84a5f, 0.7)); bb.position.y = 1.4;
   const broof = new THREE.Mesh(new THREE.ConeGeometry(2.2, 1.2, 4), new THREE.MeshStandardMaterial({ map: stripes("#e84a5f", "#fff6e3", 8, true), roughness: 0.8 })); broof.position.y = 3.4; broof.rotation.y = Math.PI / 4;
-  const bwin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.0, 0.1), std(0x3b2a1a, 0.9)); bwin.position.set(0, 1.7, 1.22);
+  const boothWin = new THREE.MeshStandardMaterial({ color: 0x3b2a1a, roughness: 0.9, emissive: 0xffb45c, emissiveIntensity: 0 });
+  boothWin.userData.window = true;
+  const bwin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.0, 0.1), boothWin); bwin.position.set(0, 1.7, 1.22);
   const bs = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.7), new THREE.MeshBasicMaterial({ map: sign("TICKETS", { bg: "#fff3d6", fg: "#e84a5f", w: 900, h: 300 }), transparent: true })); bs.position.set(0, 2.55, 1.22);
   booth.add(bb, broof, bwin, bs);
   booth.position.copy(PARK.ticketBooth);
@@ -196,7 +218,11 @@ export function signage() {
   return g;
 }
 
-export const LAMP_SPOTS: [number, number][] = [[-4, 60], [4, 60], [-4, 40], [4, 40], [-4, 20], [4, 20], [18, 36], [-18, 36], [12, -6], [-8, -14], [26, -30], [-14, -40], [34, -56], [-38, -22], [-50, 0], [-6, -56], [24, 56], [-16, 56]];
+// posts flank the avenue's two lanes (x ±9 from z 27 to 46) and the fountain island, never the basin rim
+export const LAMP_SPOTS: [number, number][] = [[-4, 60], [4, 60], [-13, 40], [13, 40], [-9, 20], [9, 20], [18, 36], [-18, 36], [12, -6], [-8, -14], [26, -30], [-14, -40], [34, -56], [-38, -22], [-50, 0], [-6, -56], [24, 56], [-16, 56]];
+
+/** [x, z, yaw] — the bench's seat faces +z rotated by yaw; World seats a piece-folk on each. */
+export const BENCH_SPOTS: [number, number, number][] = [[-13, 26, 0.3], [13, 26, -0.3], [-12, 12, 1.2], [14, 8, -1.2], [-18, 40, 0.8], [22, 44, -0.8], [40, -50, 0], [-20, -56, 0], [-34, -6, -0.8], [10, 50, 0]];
 
 export function furniture() {
   const g = new THREE.Group();
@@ -206,8 +232,7 @@ export function furniture() {
   const lampMat = new THREE.MeshStandardMaterial({ color: 0x2a3a4a, roughness: 0.5, metalness: 0.4 });
   const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff3c4, emissive: 0xffd36b, emissiveIntensity: 1.2 });
   const benches: THREE.Matrix4[] = [], lamps: THREE.Matrix4[] = [], bulbs: THREE.Matrix4[] = [];
-  const spots: [number, number, number][] = [[-6, 24, 0.3], [6, 24, -0.3], [-12, 12, 1.2], [14, 8, -1.2], [-18, 40, 0.8], [22, 44, -0.8], [40, -50, 0], [-20, -56, 0], [-36, 0, 1.5], [10, 50, 0]];
-  for (const [x, z, ry] of spots) {
+  for (const [x, z, ry] of BENCH_SPOTS) {
     benches.push(new THREE.Matrix4().compose(new THREE.Vector3(x, heightAt(x, z), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(1, 1, 1)));
   }
   for (const [x, z] of LAMP_SPOTS) {

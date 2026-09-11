@@ -16,9 +16,17 @@ export class CameraRig {
   private seatLook = new THREE.Vector3();
   private idle = 0;
   private lookTarget = new THREE.Vector3(0, 2, 0);
+  /** seat mode: a drag lets the rider glance sideways at the park; it eases back to straight ahead on release */
+  private seatYaw = 0;
+  private dragging = false;
+  private lastX = 0;
 
   constructor(readonly camera: THREE.PerspectiveCamera, dom: HTMLElement) {
     this.controls = new OrbitControls(camera, dom);
+    dom.addEventListener("pointerdown", (e) => { if (this.mode !== "seat") return; this.dragging = true; this.lastX = e.clientX; });
+    dom.addEventListener("pointermove", (e) => { if (!this.dragging || this.mode !== "seat") return; this.seatYaw = THREE.MathUtils.clamp(this.seatYaw + (e.clientX - this.lastX) * 0.004, -1.05, 1.05); this.lastX = e.clientX; });
+    const release = () => { this.dragging = false; };
+    dom.addEventListener("pointerup", release); dom.addEventListener("pointercancel", release); dom.addEventListener("pointerleave", release);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.06;
     this.controls.maxPolarAngle = Math.PI * 0.47;
@@ -67,18 +75,22 @@ export class CameraRig {
     this.controls.enabled = false;
     this.seat = seat;
     this.seatLook.copy(lookAhead);
+    this.seatYaw = 0; this.dragging = false;
   }
 
   /** Board view: fixed cinematic pose, no user orbit, but a gentle breathing drift. */
   async boardView(center: THREE.Vector3, yaw: number, seconds = 1.6) {
     const back = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const pos = center.clone().addScaledVector(back, 6.8).add(new THREE.Vector3(0, 6.6, 0));
+    // the pose is tuned for landscape; in a portrait phone (aspect ~0.46) pull back a
+    // little so the whole board plus its rank/file labels fit inside the narrow frustum
+    const k = THREE.MathUtils.clamp(0.62 / this.camera.aspect, 1, 1.6);
+    const pos = center.clone().addScaledVector(back, 6.8 * k).add(new THREE.Vector3(0, 6.6 * k, 0));
     pos.y = Math.max(pos.y, heightAt(pos.x, pos.z) + 3);
     const look = center.clone().add(new THREE.Vector3(0, 0.6, 0)).addScaledVector(back, -0.3);
     await this.flyTo(pos, look, seconds);
     this.mode = "board";
     this.controls.target.copy(look);
-    this.controls.minDistance = 4; this.controls.maxDistance = 16;
+    this.controls.minDistance = 4; this.controls.maxDistance = 16 * k;
     this.controls.minPolarAngle = 0.2; this.controls.maxPolarAngle = Math.PI * 0.44;
     this.controls.enabled = true;
     this.controls.update();
@@ -100,9 +112,10 @@ export class CameraRig {
       const p = this.seat.getWorldPosition(new THREE.Vector3());
       const q = this.seat.getWorldQuaternion(new THREE.Quaternion());
       this.camera.position.lerp(p, 1 - Math.exp(-dt * 30));
-      const look = p.clone().add(this.seatLook.clone().applyQuaternion(q));
       // blend the up vector with the seat's up so loops feel like loops
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+      if (!this.dragging) this.seatYaw *= Math.exp(-dt * 1.2);
+      const look = p.clone().add(this.seatLook.clone().applyQuaternion(q).applyAxisAngle(up, this.seatYaw));
       this.camera.up.lerp(up, 1 - Math.exp(-dt * 6)).normalize();
       this.camera.lookAt(look);
       this.lookTarget.copy(look);

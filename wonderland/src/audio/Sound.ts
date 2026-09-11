@@ -34,4 +34,16 @@ export class Sound {
   whoosh() { this.tone(180, 0.5, "sawtooth", 0.08, 600); }
   ding() { this.tone(1320, 0.3, "sine", 0.3); }
   fanfare() { [392, 523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.tone(f, 0.3, "triangle", 0.35), i * 110)); }
+  /** A ticket / star landing in the pill. */
+  coin() { this.tone(1046, 0.08, "square", 0.18); setTimeout(() => this.tone(1568, 0.1, "square", 0.18), 80); }
+  /** Chain-lift clank: a low thud plus a bright tick (90 Hz alone is inaudible on laptop speakers). */
+  clank() { this.tone(140, 0.05, "square", 0.14); this.tone(1900, 0.02, "sine", 0.06); }
+  /** The big drop. */
+  drop() { this.tone(520, 0.9, "sawtooth", 0.10, -420); }
+  /** Steam engine chug. */
+  chug() { this.tone(70, 0.07, "square", 0.16); }
+  /** One note of the carousel organ. */
+  carouselNote(f: number) { this.tone(f, 0.22, "triangle", 0.12); }
+  /** Kart bump — throttled by the caller (a pin strike wakes several bodies at once). */
+  bump() { this.tone(140, 0.1, "square", 0.25); }
 }

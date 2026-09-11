@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Assets, pbr } from "../core/Assets";
 import { instanced, merge, placed, rnd } from "./Geo";
 import { heightAt } from "./Ground";
-import { ATTRACTIONS, PARK, pathNetwork } from "./Layout";
+import { ATTRACTIONS, PAVED, pathNetwork, onPaving, nearPath } from "./Layout";
 import { glow } from "../core/Textures";
 
 /** Paved plazas: cobbles under every board and a grand circle at the centre. */
@@ -17,19 +17,37 @@ export function paving(assets: Assets) {
     edge.position.set(x, heightAt(x, z) + 0.04, z); edge.receiveShadow = true;
     g.add(m, edge);
   };
-  disc(0, 8, 24);
-  for (const a of ATTRACTIONS) if (a.id !== "grand_match") disc(a.board.pos.x, a.board.pos.z, 9.5);
-  disc(PARK.carousel.x, PARK.carousel.z, 9.5);
-  disc(PARK.gate.x, PARK.gate.z - 10, 12);
+  for (const d of PAVED) disc(d.x, d.z, d.r);
   g.name = "paving";
   return g;
 }
 
-/** A fountain with a basin, tiers and sprite spray. */
+/**
+ * PointsMaterial whose per-vertex `aSize` attribute scales gl_PointSize, so one
+ * draw call can stand in for a field of differently-sized glow sprites.  `size`
+ * is set so a point of aSize = s covers the same pixels as a sprite of world
+ * scale s: sprite px = s·(h/2)/(z·tan(fov/2)), point px = aSize·size·(h/2)/z.
+ */
+export function sizedPoints(map: THREE.Texture, fovDeg: number, opts: { blending?: THREE.Blending } = {}) {
+  const mat = new THREE.PointsMaterial({ map, size: 1 / Math.tan(THREE.MathUtils.degToRad(fovDeg / 2)), sizeAttenuation: true, vertexColors: true, transparent: true, depthWrite: false, blending: opts.blending ?? THREE.NormalBlending });
+  mat.onBeforeCompile = (s) => {
+    s.vertexShader = s.vertexShader.replace("void main() {", "attribute float aSize;\nvoid main() {").replace("gl_PointSize = size;", "gl_PointSize = size * aSize;");
+  };
+  mat.customProgramCacheKey = () => "aSize";
+  return mat;
+}
+
+const CAMERA_FOV = 50; // Renderer.ts camera fov; only affects the point/sprite size equivalence
+
+/** A fountain with a basin, tiers and a spray of 90 water drops in one draw call. */
 export class Fountain {
   readonly group = new THREE.Group();
-  private drops: THREE.Sprite[] = [];
+  private readonly n = 90;
   private age: number[] = [];
+  private pos: Float32Array;
+  private col: Float32Array;
+  private sz: Float32Array;
+  private geo: THREE.BufferGeometry;
   private t = 0;
   constructor(pos: THREE.Vector3) {
     this.group.position.copy(pos);
@@ -43,23 +61,109 @@ export class Fountain {
     const crown = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffd23c, metalness: 0.6, roughness: 0.3 })); crown.position.y = 3.7;
     this.group.add(basin, inner, tier, tierWater, column, top, crown);
     this.group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    const mat = new THREE.SpriteMaterial({ map: glow("#dff4ff"), transparent: true, opacity: 0.8, depthWrite: false });
-    for (let i = 0; i < 90; i++) { const s = new THREE.Sprite(mat); s.scale.setScalar(0.35); this.group.add(s); this.drops.push(s); this.age.push(Math.random() * 1.6); }
+    // the spray: one THREE.Points with per-drop alpha + size (the old 90 sprites
+    // shared one material, so the whole spray pulsed in unison — now every drop
+    // fades on its own, and it's 1 draw call instead of 90)
+    this.pos = new Float32Array(this.n * 3); this.col = new Float32Array(this.n * 4); this.sz = new Float32Array(this.n);
+    this.geo = new THREE.BufferGeometry();
+    this.geo.setAttribute("position", new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute("color", new THREE.BufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute("aSize", new THREE.BufferAttribute(this.sz, 1).setUsage(THREE.DynamicDrawUsage));
+    this.geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 3, 0), 6);
+    const spray = new THREE.Points(this.geo, sizedPoints(glow("#dff4ff"), CAMERA_FOV));
+    spray.name = "spray";
+    this.group.add(spray);
+    for (let i = 0; i < this.n; i++) this.age.push(Math.random() * 1.6);
     this.group.name = "fountain";
   }
   update(dt: number) {
     this.t += dt;
-    for (let i = 0; i < this.drops.length; i++) {
+    const tint = [0.87, 0.96, 1.0];
+    for (let i = 0; i < this.n; i++) {
       this.age[i] += dt;
       if (this.age[i] > 1.6) this.age[i] = 0;
-      const a = this.age[i], k = (i / this.drops.length) * Math.PI * 2;
+      const a = this.age[i], k = (i / this.n) * Math.PI * 2;
       const r = 0.15 + a * 1.9;
       const y = 3.6 + a * 4.2 - 4.9 * a * a;
-      const d = this.drops[i];
-      d.position.set(Math.cos(k + i) * r, y, Math.sin(k + i) * r);
-      d.material.opacity = Math.max(0, 0.85 - a * 0.45);
-      d.scale.setScalar(0.25 + a * 0.35);
+      this.pos[i * 3] = Math.cos(k + i) * r; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = Math.sin(k + i) * r;
+      this.col[i * 4] = tint[0]; this.col[i * 4 + 1] = tint[1]; this.col[i * 4 + 2] = tint[2]; this.col[i * 4 + 3] = Math.max(0, 0.85 - a * 0.45);
+      this.sz[i] = 0.25 + a * 0.35;
     }
+    for (const k of ["position", "color", "aSize"]) (this.geo.attributes[k] as THREE.BufferAttribute).needsUpdate = true;
+  }
+}
+
+/**
+ * A fireworks show over the plaza: one THREE.Points of 600 additive sparks.
+ * `show(seconds)` fires a warm burst every ~1.1 s; sparks fall under gravity
+ * and fade by scaling their colour toward black (additive, so black = gone).
+ */
+export class Fireworks {
+  readonly points: THREE.Points;
+  private readonly n = 600;
+  private pos = new Float32Array(this.n * 3);
+  private col = new Float32Array(this.n * 3);
+  private vel = new Float32Array(this.n * 3);
+  private base = new Float32Array(this.n * 3);
+  private life = new Float32Array(this.n);
+  private head = 0;
+  private t = 0;
+  private showUntil = -1;
+  private nextBurst = 0;
+  private geo = new THREE.BufferGeometry();
+  private palette = [0xffd23c, 0xff5d5d, 0x35d07f, 0xffa640, 0x7ec8ff];
+  constructor() {
+    this.geo.setAttribute("position", new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute("color", new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+    this.points = new THREE.Points(this.geo, new THREE.PointsMaterial({ map: glow("#ffffff"), size: 0.6 / Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)), sizeAttenuation: true, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.points.frustumCulled = false;
+    this.points.visible = false;
+    this.points.name = "fireworks";
+    for (let i = 0; i < this.n; i++) this.pos[i * 3 + 1] = -50;
+  }
+  /** One shell bursting at `at`. */
+  burst(at: THREE.Vector3, color: number, count = 110) {
+    const c = new THREE.Color(color);
+    for (let k = 0; k < count; k++) {
+      const i = this.head; this.head = (this.head + 1) % this.n;
+      // uniform direction on the sphere, speed spread so the shell has a soft edge
+      const u = Math.random() * 2 - 1, ph = Math.random() * Math.PI * 2, s = 7 + Math.random() * 7;
+      const rr = Math.sqrt(1 - u * u);
+      this.vel[i * 3] = rr * Math.cos(ph) * s; this.vel[i * 3 + 1] = u * s + 1.5; this.vel[i * 3 + 2] = rr * Math.sin(ph) * s;
+      this.pos[i * 3] = at.x; this.pos[i * 3 + 1] = at.y; this.pos[i * 3 + 2] = at.z;
+      const tw = 0.85 + Math.random() * 0.3;
+      this.base[i * 3] = c.r * tw; this.base[i * 3 + 1] = c.g * tw; this.base[i * 3 + 2] = c.b * tw;
+      this.life[i] = 1.6 + Math.random() * 0.8;
+    }
+    this.points.visible = true;
+  }
+  /** Run a show for `seconds` over the plaza. */
+  show(seconds = 8) {
+    this.showUntil = this.t + seconds;
+    this.nextBurst = this.t;
+  }
+  update(dt: number) {
+    this.t += dt;
+    if (this.t < this.showUntil && this.t >= this.nextBurst) {
+      this.nextBurst = this.t + 0.9 + Math.random() * 0.5;
+      this.burst(new THREE.Vector3(-25 + Math.random() * 50, 26 + Math.random() * 10, -35 + Math.random() * 30), this.palette[Math.floor(Math.random() * this.palette.length)]);
+    }
+    if (!this.points.visible) return;
+    let any = false;
+    const drag = Math.exp(-dt * 0.9);
+    for (let i = 0; i < this.n; i++) {
+      if (this.life[i] <= 0) { this.col[i * 3] = this.col[i * 3 + 1] = this.col[i * 3 + 2] = 0; continue; }
+      any = true;
+      this.life[i] -= dt;
+      this.vel[i * 3] *= drag; this.vel[i * 3 + 2] *= drag;
+      this.vel[i * 3 + 1] = this.vel[i * 3 + 1] * drag - 6.5 * dt;
+      this.pos[i * 3] += this.vel[i * 3] * dt; this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt; this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
+      const a = THREE.MathUtils.clamp(this.life[i] / 1.2, 0, 1) * (0.7 + 0.3 * Math.sin(this.t * 18 + i)); // flicker as they die
+      this.col[i * 3] = this.base[i * 3] * a; this.col[i * 3 + 1] = this.base[i * 3 + 1] * a; this.col[i * 3 + 2] = this.base[i * 3 + 2] * a;
+    }
+    (this.geo.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    (this.geo.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+    if (!any && this.t >= this.showUntil) this.points.visible = false;
   }
 }
 
@@ -85,7 +189,8 @@ export function fencesAndHedges() {
       const n = Math.floor(len / 0.5);
       for (let k = 2; k < n - 2; k++) {
         const p = a.clone().addScaledVector(dir, k * 0.5).addScaledVector(side, sgn * off);
-        if (Math.hypot(p.x, p.z - 8) < 26) continue; // keep the grand plaza open
+        // plazas and the fountain island stay open, and no picket lands on a crossing walkway at a junction
+        if (onPaving(p.x, p.z, 2) || Math.hypot(p.x, p.z - 36) < 9 || nearPath(p.x, p.z, 3.4)) continue;
         p.y = heightAt(p.x, p.z);
         pickets.push(new THREE.Matrix4().compose(p, q, new THREE.Vector3(1, 1, 1)));
         if (k % 2 === 0) { rails.push(new THREE.Matrix4().compose(p.clone().add(new THREE.Vector3(0, 0.35, 0)).addScaledVector(dir, 0.5), q, new THREE.Vector3(1, 1, 1))); rails.push(new THREE.Matrix4().compose(p.clone().add(new THREE.Vector3(0, 0.75, 0)).addScaledVector(dir, 0.5), q, new THREE.Vector3(1, 1, 1))); }

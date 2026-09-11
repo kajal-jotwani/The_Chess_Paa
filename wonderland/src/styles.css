@@ -39,7 +39,15 @@ button { font-family: var(--font); cursor: pointer; }
 .topbar .spacer { flex: 1; }
 .brand { font-family: var(--font-title); font-weight: 800; font-size: 22px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.25), 0 4px 14px rgba(0,0,0,.25); padding: 6px 14px; background: rgba(59,42,26,.28); border-radius: 16px; backdrop-filter: blur(6px); }
 .brand small { font-weight: 600; font-size: 13px; opacity: .9; display: block; margin-top: -4px; }
-.pill { display: inline-flex; align-items: center; gap: 7px; background: var(--cream); color: var(--ink); border: 3px solid #fff; border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: 15px; box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+.pill { position: relative; display: inline-flex; align-items: center; gap: 7px; background: var(--cream); color: var(--ink); border: 3px solid #fff; border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: 15px; box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+/* reward feedback: the pill bumps and a "+1" floats out of it */
+@keyframes bump { 30% { transform: scale(1.22); } }
+.pill.bump { animation: bump .4s cubic-bezier(.2,1.4,.4,1); }
+.pill .float { position: absolute; left: 50%; top: -4px; transform: translateX(-50%); font-weight: 800; color: var(--ink); text-shadow: 0 2px 0 #fff; pointer-events: none; white-space: nowrap; animation: floatUp 1s ease-out forwards; }
+@keyframes floatUp { to { transform: translate(-50%, -34px); opacity: 0; } }
+.pill.think { display: none; }
+.pill.think.on { display: inline-flex; }
+.kbd { font: 600 11px/1 ui-monospace, monospace; padding: 2px 6px; border-radius: 5px; border: 1px solid rgba(59,42,26,.35); opacity: .8; margin-left: 6px; }
 .btn { border: 3px solid #fff; border-radius: 999px; padding: 10px 18px; font-weight: 700; font-size: 16px; background: var(--sun); color: var(--ink); box-shadow: 0 6px 0 var(--sun-deep), 0 10px 18px rgba(0,0,0,.18); transition: transform .08s ease, box-shadow .08s ease; user-select: none; }
 .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--sun-deep), 0 6px 10px rgba(0,0,0,.18); }
 .btn.teal { background: var(--teal); color: #fff; box-shadow: 0 6px 0 var(--teal-deep), 0 10px 18px rgba(0,0,0,.18); }
@@ -68,6 +76,18 @@ button { font-family: var(--font); cursor: pointer; }
 /* ---------- panels ---------- */
 .panel { position: absolute; top: 76px; right: 16px; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 110px); overflow: auto; background: var(--cream); border: 4px solid #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; transition: transform .3s ease, opacity .3s; }
 .panel.hidden { opacity: 0; transform: translateX(30px); pointer-events: none; }
+/* the panel can be tucked away to the right edge, leaving a map tab to bring it back */
+.panel { --tab: 44px; }
+.panel.collapsed { transform: translateX(calc(100% - var(--tab))); overflow: hidden; }
+.panel .panel-tab { position: absolute; left: 0; top: 0; width: var(--tab); height: 48px; display: grid; place-items: center; background: transparent; border: 0; font-size: 20px; cursor: pointer; opacity: .55; transition: opacity .15s; }
+.panel .panel-tab:hover, .panel.collapsed .panel-tab { opacity: 1; }
+.panel .panel-tab .open { font-size: 26px; line-height: 1; color: var(--ink-soft); }
+.panel .panel-tab .closed { display: none; }
+.panel.collapsed .panel-tab { height: 100%; align-content: start; padding-top: 12px; }
+.panel.collapsed .panel-tab .open { display: none; }
+.panel.collapsed .panel-tab .closed { display: inline; }
+.panel > h2 { margin-left: 30px; }
+.panel p.divider { margin: 14px 0 0; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-soft); opacity: .8; }
 .panel h2 { font-family: var(--font-title); margin: 0 0 4px; font-size: 24px; color: var(--ink); }
 .panel h2 .emoji { margin-right: 6px; }
 .panel p { margin: 4px 0 10px; color: var(--ink-soft); font-size: 15px; }
@@ -111,12 +131,25 @@ button { font-family: var(--font); cursor: pointer; }
 .rhyme .line { display: block; opacity: .35; transition: opacity .3s; }
 .rhyme .line.on { opacity: 1; font-weight: 600; }
 .quality { font-size: 12px; opacity: .8; }
+/* ---------- Rook Rover pad: steering under the left thumb, throttle under the right ---------- */
+.drive-pad { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 14px); display: flex; justify-content: space-between; padding: 0 18px; pointer-events: none; }
+.drive-pad .cluster { display: flex; gap: 10px; }
+.drive-pad .btn { pointer-events: auto; width: 64px; height: 64px; touch-action: none; -webkit-user-select: none; user-select: none; }
+#ui.driving .paa { bottom: 96px; }
+
 @media (max-width: 720px) {
   .paa-portrait { width: 72px; height: 72px; }
   .bubble .text { font-size: 16px; }
   .panel { top: 70px; width: calc(100vw - 32px); max-height: 46vh; }
-  .brand { font-size: 17px; }
-  .brand small { display: none; }
+  /* the loader and intro already carry the name; on a phone the row needs the room for the Park map button */
+  .brand { display: none; }
+  .topbar { gap: 6px; }
+  #btn-home { order: -1; padding: 8px 12px; font-size: 15px; }
+  .pill { padding: 6px 10px; font-size: 14px; }
+  /* HUD moves up under the top bar so it can never sit on ChessPaa's bubble */
+  .hud-bottom-right { bottom: auto; top: 68px; right: 12px; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: calc(100vw - 24px); }
+  .paa { left: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px); max-width: calc(100vw - 24px); }
+  #ui.driving .paa { bottom: calc(env(safe-area-inset-bottom) + 96px); }
 }
 
 /* ---------- intro ---------- */

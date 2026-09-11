@@ -3,6 +3,7 @@
  * modals and toasts.  Plain DOM — no framework — so it stays tiny and fast.
  */
 export interface Action { label: string; onClick: () => void; kind?: "sun" | "teal" | "berry" | "ghost"; }
+export type PromotionPiece = "q" | "r" | "b" | "n";
 
 export class UI {
   readonly root: HTMLElement;
@@ -10,6 +11,10 @@ export class UI {
   private panel: HTMLElement; private modal: HTMLElement; private modalWrap: HTMLElement; private toastEl: HTMLElement;
   private topbar: HTMLElement; private hudRight: HTMLElement;
   private typing: number | null = null;
+  /** actions the current speech will show once it finishes typing */
+  private pendingActions: Action[] = [];
+  /** resolver of an open promotion picker, so dismissing the modal can settle it with null */
+  private promoResolve: ((p: PromotionPiece | null) => void) | null = null;
   onHome?: () => void;
   onQuality?: () => void;
   onMute?: () => void;
@@ -50,8 +55,23 @@ export class UI {
   }
   private q<T extends HTMLElement = HTMLElement>(sel: string): T { return this.root.querySelector(sel) as T; }
 
-  setStars(n: number) { this.q("#stars").textContent = String(n); }
-  setTickets(n: number) { this.q("#tickets").textContent = String(n); }
+  private lastStars = 0; private lastTickets = 0; private booted = 0;
+  setStars(n: number) { this.bumpPill("#pill-stars", "#stars", n, n - this.lastStars, "⭐"); this.lastStars = n; }
+  setTickets(n: number) { this.bumpPill("#pill-tickets", "#tickets", n, n - this.lastTickets, "🎟"); this.lastTickets = n; }
+  /** Every counter change bumps its pill and floats a "+N" — except the initial fill from localStorage. */
+  private bumpPill(pillSel: string, spanSel: string, n: number, delta: number, glyph: string) {
+    this.q(spanSel).textContent = String(n);
+    if (this.booted < 2) { this.booted++; return; } // the App constructor's first setStars + setTickets pair
+    const pill = this.q(pillSel);
+    pill.classList.remove("bump"); void pill.offsetWidth; pill.classList.add("bump");
+    if (delta > 0) {
+      const f = document.createElement("span"); f.className = "float"; f.textContent = `+${delta} ${glyph}`;
+      f.addEventListener("animationend", () => f.remove());
+      pill.appendChild(f);
+    }
+  }
+  /** True while ChessPaa's bubble is still typing out — callers that would interrupt mid-sentence can wait. */
+  isTyping() { return this.typing !== null; }
   setMuted(m: boolean) { this.q("#btn-mute").textContent = m ? "🔇" : "🔊"; }
   setQualityLabel(q: string) { this.q("#btn-quality").title = `Graphics: ${q} (click to change)`; }
   setThemeLabel(theme: string, auto: boolean) {
@@ -66,6 +86,7 @@ export class UI {
     if (this.typing) { clearInterval(this.typing); this.typing = null; }
     this.paaText.innerHTML = "";
     this.paaActions.innerHTML = "";
+    this.pendingActions = actions;
     let i = 0;
     const safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
     // keep <b> tags for emphasis via **word**
@@ -73,12 +94,14 @@ export class UI {
     const plain = html.replace(/<[^>]+>/g, "");
     this.typing = window.setInterval(() => {
       i += 2;
-      if (i >= plain.length) { this.paaText.innerHTML = html; clearInterval(this.typing!); this.typing = null; this.renderActions(actions); return; }
+      if (i >= plain.length) { this.paaText.innerHTML = html; clearInterval(this.typing!); this.typing = null; this.renderActions(this.pendingActions); return; }
       this.paaText.textContent = plain.slice(0, i);
     }, 16);
     if (actions.length) this.renderActions(actions);
     return Math.min(9, 1.2 + plain.length / 28);
   }
+  /** Swap the buttons under the current speech without re-saying it (survives the type-out). */
+  setActions(actions: Action[]) { this.pendingActions = actions; this.renderActions(actions); }
   private renderActions(actions: Action[]) {
     this.paaActions.innerHTML = "";
     for (const a of actions) {
@@ -92,8 +115,13 @@ export class UI {
   hush() { this.paa.classList.add("hidden"); }
 
   /** Right-hand panel with arbitrary HTML; returns the element for wiring. */
-  showPanel(html: string): HTMLElement { this.panel.innerHTML = html; this.panel.classList.remove("hidden"); return this.panel; }
-  hidePanel() { this.panel.classList.add("hidden"); }
+  showPanel(html: string): HTMLElement {
+    this.panel.innerHTML = `<button class="panel-tab" aria-label="Toggle panel" title="Tuck the panel away"><span class="open">›</span><span class="closed">🗺️</span></button>` + html;
+    this.panel.classList.remove("hidden", "collapsed");
+    (this.panel.querySelector(".panel-tab") as HTMLButtonElement).onclick = () => this.panel.classList.toggle("collapsed");
+    return this.panel;
+  }
+  hidePanel() { this.panel.classList.add("hidden"); this.panel.classList.remove("collapsed"); }
   panelEl() { return this.panel; }
 
   /** Bottom-right HUD (timers, streaks, buttons). */
@@ -101,7 +129,11 @@ export class UI {
   clearHud() { this.hudRight.innerHTML = ""; }
 
   showModal(html: string): HTMLElement { this.modal.innerHTML = html; this.modalWrap.classList.remove("hidden"); return this.modal; }
-  hideModal() { this.modalWrap.classList.add("hidden"); }
+  hideModal() {
+    const r = this.promoResolve; this.promoResolve = null; // null first so a re-entrant hide can't double-resolve
+    this.modalWrap.classList.add("hidden");
+    r?.(null);
+  }
 
   toast(text: string, ms = 1800) {
     this.toastEl.textContent = text;
@@ -109,12 +141,14 @@ export class UI {
     window.setTimeout(() => this.toastEl.classList.remove("show"), ms);
   }
 
-  /** Promotion picker — resolves with the chosen piece letter. */
-  choosePromotion(color: "w" | "b"): Promise<"q" | "r" | "b" | "n"> {
+  /** Promotion picker — resolves with the chosen piece letter, or null if the modal is dismissed (e.g. Home). */
+  choosePromotion(color: "w" | "b"): Promise<PromotionPiece | null> {
     return new Promise((resolve) => {
+      this.hideModal(); // settles any earlier picker with null before we take its place
+      this.promoResolve = resolve;
       const glyph = color === "w" ? { q: "♕", r: "♖", b: "♗", n: "♘" } : { q: "♛", r: "♜", b: "♝", n: "♞" };
       const m = this.showModal(`<h1>Promotion time!</h1><p>Your pawn reached the last rank. What should it become?</p><div class="promo">${(["q", "r", "b", "n"] as const).map((p) => `<button data-p="${p}">${glyph[p]}</button>`).join("")}</div>`);
-      m.querySelectorAll("button").forEach((b) => { (b as HTMLButtonElement).onclick = () => { this.hideModal(); resolve((b as HTMLButtonElement).dataset.p as any); }; });
+      m.querySelectorAll("button").forEach((b) => { (b as HTMLButtonElement).onclick = () => { this.promoResolve = null; this.hideModal(); resolve((b as HTMLButtonElement).dataset.p as PromotionPiece); }; });
     });
   }
 

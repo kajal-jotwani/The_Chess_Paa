@@ -55,14 +55,23 @@ const OOPS = [
   "Oh my whiskers! Let me show you what happened.",
 ];
 
-function tierFor(loss: number, missedMate: boolean, sacrificeAndFine: boolean): Tier {
-  if (missedMate && loss > 1) return "careful";
+/**
+ * Lichess's win-probability curve (0 pawns → 50%, ±50 → ~100/0).  Grading in
+ * win% rather than raw pawns means a child who is up a queen isn't scolded
+ * for a harmless imprecision, and a missed mate-in-5 isn't "Oops!" when the
+ * position is still crushing.
+ */
+const winPct = (pawns: number) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * pawns * 100)) - 1);
+
+/** `lossPct` is win-probability lost versus the best move, in percentage points. */
+function tierFor(lossPct: number, missedMate: boolean, sacrificeAndFine: boolean): Tier {
+  if (missedMate && lossPct > 8) return "careful";
   if (sacrificeAndFine) return "brilliant";
-  if (loss <= 0.08) return "great";
-  if (loss <= 0.35) return "good";
-  if (loss <= 0.7) return "okay";
-  if (loss <= 1.4) return "hmm";
-  if (loss <= 3) return "careful";
+  if (lossPct <= 1) return "great";
+  if (lossPct <= 4) return "good";
+  if (lossPct <= 8) return "okay";
+  if (lossPct <= 16) return "hmm";
+  if (lossPct <= 30) return "careful";
   return "oops";
 }
 
@@ -97,9 +106,10 @@ export async function judgeMove(engine: Engine, fenBefore: string, played: Move,
   const isBest = !!bestMove && bestMove.from === played.from && bestMove.to === played.to && (bestMove.promotion ?? "q") === (played.promotion ?? "q");
   let loss = isBest ? 0 : Math.max(0, bestForMover - afterForMover);
   if (bestForMover > 40 && afterForMover > 40) loss = 0; // still mating
+  // grade in win-probability space; `loss === 0` keeps the still-mating guard in force
+  const lossPct = isBest || loss === 0 ? 0 : Math.max(0, winPct(bestForMover) - winPct(afterForMover));
   const evalAfter = afterForMover * (moverIsWhite ? 1 : -1);
-  const mateIn = after.isCheckmate() ? 0 : afterLine?.mate != null ? -afterLine.mate * -1 * (1) : null; // afterLine mate is from opponent's view
-  const moverMateIn = afterLine?.mate != null ? -afterLine.mate : null; // + means mover mates in N (opponent is mated)
+  const moverMateIn = afterLine?.mate != null ? -afterLine.mate : null; // afterLine mate is from the opponent's view: + means mover mates in N
 
   const facts: string[] = [];
   const showSquares: Square[] = [];
@@ -111,8 +121,12 @@ export async function judgeMove(engine: Engine, fenBefore: string, played: Move,
   const hangingBefore = hangingPieces(before, mover);
   const newlyHanging = hangingAfter.filter((h) => !hangingBefore.some((b) => b.square === h.square && b.piece === h.piece) || h.square === played.to);
   const freeBefore = freeCaptures(before, mover);
-  const missedFree = !played.captured && freeBefore.length && freeBefore[0].gain >= 3 ? freeBefore[0] : null;
-  const missedMate = !!(bestLine && bestLine.mate !== null && bestLine.mate > 0 && bestLine.mate <= 3 && !givesMate && (moverMateIn === null || moverMateIn > bestLine.mate));
+  // only claim a missed capture when Stockfish agrees that capture was the move
+  const missedFree = !played.captured && bestMove?.captured
+    ? (freeBefore.find((f) => f.move.to === bestMove.to && f.gain >= 3) ?? null)
+    : null;
+  // moverMateIn <= 0: the child had a mate and instead walked into one — the worst case, and the gentlest tier
+  const missedMate = !!(bestLine && bestLine.mate !== null && bestLine.mate > 0 && bestLine.mate <= 3 && !givesMate && (moverMateIn === null || moverMateIn <= 0 || moverMateIn > bestLine.mate));
   const forks = forkTargets(after, played.to, mover);
   const bestForks = bestMove && !isBest ? forkTargets(new Chess(bestMove.after), bestMove.to, mover) : [];
   const oppReply = afterLine ? moveFromUci(after, afterLine.move) : null;
@@ -124,9 +138,12 @@ export async function judgeMove(engine: Engine, fenBefore: string, played: Move,
   const developed = (played.piece === "n" || played.piece === "b") && moveNo <= 10 && ["1", "8"].includes(played.from[1]);
   const earlyQueen = played.piece === "q" && moveNo <= 5 && developedMinors(before, mover) < 2;
   const capturedValue = played.captured ? VALUE[played.captured] : 0;
-  const sacrifice = !!played.captured && VALUE[played.piece] > capturedValue + 1 && after.attackers(played.to, opp).length > 0 && loss <= 0.1 || (!played.captured && hangingAfter.some((h) => h.square === played.to && VALUE[h.piece] >= 3) && loss <= 0.1);
+  // a real sacrifice needs a LEGAL recapture (attackers() would count a pinned piece or a king that can't take)
+  const canRecapture = after.moves({ verbose: true }).some((r) => r.to === played.to);
+  const sacrifice = (!!played.captured && VALUE[played.piece] > capturedValue + 1 && canRecapture && lossPct <= 1)
+    || (!played.captured && hangingAfter.some((h) => h.square === played.to && VALUE[h.piece] >= 3) && lossPct <= 1);
 
-  const tier = tierFor(loss, missedMate, sacrifice);
+  const tier = tierFor(lossPct, missedMate, sacrifice);
   const meta = TIER_META[tier];
 
   // --- build the explanation
@@ -159,21 +176,27 @@ export async function judgeMove(engine: Engine, fenBefore: string, played: Move,
   // the "why" for anything below great
   if (tier !== "great" && tier !== "brilliant" && !givesMate) {
     if (missedMate && bestMove) {
-      parts.push(`There was a CHECKMATE in ${bestLine!.mate}! ${cap(describeMove(bestMove))} would have finished the game.`);
+      parts.push(`There was a CHECKMATE in ${bestLine!.mate}! ${cap(plain(describeMove(bestMove)))} would have finished the game.`);
       facts.push("missed mate"); showSquares.push(bestMove.from, bestMove.to);
-    } else if (newlyHanging.length) {
+      if (oppMatesSoon) {
+        parts.push(`And now it's your king in trouble — watch ${oppReply ? sentence(describeMove(oppReply)) : "the pieces near your king."}`);
+        facts.push("mate threat");
+        const k = kingSquare(after, mover); if (k) showSquares.push(k);
+      }
+    } else if (newlyHanging.length && lossPct > 8) {
+      // only for hmm/careful/oops — "Nice one!" must never be followed by "Uh-oh"
       const h = newlyHanging[0];
       const att = h.cheapestAttacker;
       parts.push(`Uh-oh: ${you(h.square)} is hanging — the enemy ${NAME[att]} can gobble it up${h.defenders ? " and it costs you more than you get back" : " for free"}.`);
       facts.push("hanging piece"); showSquares.push(h.square);
     } else if (missedFree) {
-      parts.push(`You could have taken the ${NAME[missedFree.move.captured!]} on ${missedFree.move.to} for free! Always look for hungry captures first.`);
+      parts.push(`You could have taken the ${NAME[missedFree.move.captured!]} on ${missedFree.move.to} ${missedFree.free ? "for free" : "and come out ahead"}! Always look for hungry captures first.`);
       facts.push("missed free capture"); showSquares.push(missedFree.move.to);
     } else if (bestForks.length >= 2 && bestMove) {
       parts.push(`${cap(describeMove(bestMove))} was a FORK: attacking ${bestForks.join(" and ")} at the same time. Two targets, one hero!`);
       facts.push("missed fork"); showSquares.push(...bestForks);
     } else if (oppMatesSoon) {
-      parts.push(`Danger! Your king can be checkmated in ${afterLine!.mate}. Look at ${oppReply ? describeMove(oppReply) : "the enemy pieces near your king"}.`);
+      parts.push(`Danger! Your king can be checkmated in ${afterLine!.mate}. Look at ${oppReply ? sentence(describeMove(oppReply)) : "the enemy pieces near your king."}`);
       facts.push("mate threat");
       const k = kingSquare(after, mover); if (k) showSquares.push(k);
     } else if (oppForks.length >= 2 && oppReply) {
@@ -183,7 +206,7 @@ export async function judgeMove(engine: Engine, fenBefore: string, played: Move,
       parts.push("The queen came out very early. She's precious — little pieces can chase her around and gain time. Knights and bishops first!");
       facts.push("early queen");
     } else if (bestMove && loss > 0.3) {
-      parts.push(`ChessPaa would have played ${describeMove(bestMove)}.`);
+      parts.push(`ChessPaa would have played ${sentence(describeMove(bestMove))}`);
     }
   }
   if (played.promotion) { parts.push(`A pawn became a ${NAME[played.promotion]}! That's called promotion — the pawn's dream come true.`); facts.push("promotion"); }
@@ -193,6 +216,10 @@ export async function judgeMove(engine: Engine, fenBefore: string, played: Move,
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** End with exactly one terminal mark — describeMove() may already finish with "!". */
+const sentence = (s: string) => (/[.!?]$/.test(s) ? s : s + ".");
+/** Strip describeMove()'s trailing flourish so it can sit mid-sentence ("…checkmate! would have finished"). */
+const plain = (s: string) => s.replace(/ — checkmate!$| with check!$/, "");
 
 /** A gentle hint for a puzzle or a game: never the answer, just where to look. */
 export function hintFor(chess: Chess, solution: Move): string {

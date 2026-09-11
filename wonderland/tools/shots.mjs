@@ -12,18 +12,23 @@ await page.waitForFunction(() => window.wonderland && !document.getElementById("
 await page.waitForTimeout(1500);
 await page.screenshot({ path: `${out}/01-intro.png` });
 await page.click("#intro-enter");
-await page.waitForTimeout(4500);
+await page.waitForTimeout(800);
+await page.evaluate(() => window.wonderland.tick(6)); // settle the fly-in regardless of headless frame rate
+await page.waitForTimeout(400);
 await page.screenshot({ path: `${out}/02-hub-day.png` });
 for (const t of ["dusk", "night", "rain"]) {
   await page.evaluate(async (t) => { await window.wonderland.app.setTheme(t, true); }, t);
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => window.wonderland.tick(1));
   await page.screenshot({ path: `${out}/03-hub-${t}.png` });
 }
 await page.evaluate(() => window.wonderland.app.setTheme("day", true));
 await page.evaluate(() => window.wonderland.app.enter("grand_match"));
 await page.waitForTimeout(3000);
 await page.evaluate(() => { const c = document.querySelector('.card[data-l="bunny"]'); if (c) c.click(); });
-await page.waitForTimeout(3500);
+await page.waitForTimeout(1500);
+await page.evaluate(() => window.wonderland.tick(4));
+await page.waitForTimeout(300);
 await page.screenshot({ path: `${out}/04-grand-match.png` });
 await browser.close();
 console.log("done");

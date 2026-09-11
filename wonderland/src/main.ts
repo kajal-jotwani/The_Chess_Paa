@@ -27,7 +27,8 @@ async function boot() {
   const assets = await loadAssets(r.renderer, (frac) => { fill.style.width = `${Math.round(frac * 100)}%`; }, theme);
   const world = new World(r.scene, assets);
   const rig = new CameraRig(r.camera, canvas);
-  const atmosphere = new Atmosphere({ scene: r.scene, sun: world.sun, hemi: world.hemi, sunGlow: world.sunGlow, renderer: r.renderer, setBloom: (v) => r.setBloom(v), setSaturation: (v) => r.setSaturation(v), worldGroup: world.group, wetMaterials: world.wetMaterials, lampSpots: world.lampSpots });
+  const atmosphere = new Atmosphere({ scene: r.scene, sun: world.sun, hemi: world.hemi, sunGlow: world.sunGlow, renderer: r.renderer, setBloom: (v) => r.setBloom(v), setSaturation: (v) => r.setSaturation(v), worldGroup: world.group, wetMaterials: world.wetMaterials, lampSpots: world.lampSpots, lampGlowSpots: world.lampGlowSpots, sky3d: world.sky3d });
+  atmosphere.primeSky(theme, { envMap: assets.envMap, skyMap: assets.skyMap }); // the boot sky joins the cache so toggling back is free
   await atmosphere.apply(theme, true);
   const app = new App(r, world, rig, assets, atmosphere);
   (window as any).wonderland = { app, world, rig, renderer: r };
@@ -36,6 +37,7 @@ async function boot() {
   r.renderer.compile(r.scene, r.camera);
   document.getElementById("loader")!.classList.add("hidden");
   const intro = document.getElementById("intro")!;
+  if (matchMedia("(pointer: coarse)").matches) { const hint = document.querySelector(".intro-hint"); if (hint) hint.textContent = "Tap to explore · drag to look around · pinch to zoom"; }
   intro.classList.remove("hidden");
   app.preroll();
   document.getElementById("intro-enter")!.onclick = () => { intro.classList.add("hidden"); app.start(); };

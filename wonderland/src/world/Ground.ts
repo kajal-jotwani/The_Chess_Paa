@@ -16,6 +16,9 @@ export function heightAt(x: number, z: number) {
   if (d > 120) {
     const k = (d - 120) / 140;
     h += k * k * 14 * (0.7 + 0.3 * Math.sin(x * 0.05) * Math.cos(z * 0.04));
+    // a second, shorter octave gives the ridge some character; scaled by k*k so
+    // the terrain never dips below zero outside the lake (base minimum is 9.8*k*k)
+    h += k * k * 7 * Math.sin(x * 0.11 + z * 0.07) * Math.cos(z * 0.13 - x * 0.05);
   }
   const L = PARK.lake;
   const e = Math.hypot((x - L.center.x) / L.rx, (z - L.center.z) / L.rz);
@@ -37,7 +40,7 @@ export function buildGround(assets: Assets) {
   geo.computeVertexNormals();
   geo.setAttribute("uv2", geo.attributes.uv);
 
-  const mat = pbr(assets.tex.grass, { repeat: SIZE / 4.5, color: 0xffffff, roughness: 1, metalness: 0, normalScale: 0.7, envMapIntensity: 0.7 });
+  const mat = pbr(assets.tex.grass, { repeat: SIZE / 4.5, color: 0xffffff, roughness: 1, metalness: 0, normalScale: 0.7, envMapIntensity: 0.45 });
   const sand = assets.tex.sand;
   const sandMap = sand.map.clone(); sandMap.needsUpdate = true;
   const sandNor = sand.normalMap.clone(); sandNor.needsUpdate = true;
@@ -50,7 +53,7 @@ export function buildGround(assets: Assets) {
     ctx.fillStyle = "#fff";
     const [cx, cz] = toPx(0, 8);
     ctx.beginPath(); ctx.ellipse(cx, cz, 34 * scale, 30 * scale, 0, 0, Math.PI * 2); ctx.fill();
-    for (const [x, z, r] of [[44, -66, 15], [28, 48, 15], [-16, -64, 15], [-44, 4, 15], [-24, 40, 13], [26, -28, 16], [44, -86, 20], [-16, -92, 16], [-52, -10, 12], [0, 66, 18]]) {
+    for (const [x, z, r] of [[44, -66, 15], [28, 48, 15], [-16, -64, 15], [-44, 4, 15], [-24, 40, 13], [26, -28, 16], [44, -92, 20], [-16, -92, 16], [-51, 26, 12], [-67, -8, 10], [0, 66, 18], [0, 36, 10]]) {
       const [px, pz] = toPx(x, z); ctx.beginPath(); ctx.ellipse(px, pz, r * scale, r * 0.9 * scale, 0, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
@@ -75,16 +78,19 @@ export function buildGround(assets: Assets) {
     shader.uniforms.sandArm = { value: sandArm };
     shader.uniforms.maskMap = { value: mask };
     shader.uniforms.sandScale = { value: 0.9 };
-    shader.uniforms.sandTint = { value: new THREE.Color(1.75, 1.5, 1.12) };
-    shader.uniforms.grassTint = { value: new THREE.Color(0.98, 1.22, 0.66) };
+    // both photo textures are brown-leaning: the sand is desaturated in the shader
+    // before a blue-leaning tint turns it into warm limestone grey, and the grass
+    // gets a strong green push (G/R ~ 1.45) so the lawn reads as lawn, not khaki
+    shader.uniforms.sandTint = { value: new THREE.Color(1.55, 1.6, 1.7) };
+    shader.uniforms.grassTint = { value: new THREE.Color(0.52, 1.02, 0.48) };
     shader.uniforms.worldSize = { value: SIZE };
     shader.uniforms.macroMap = { value: macroNoise() };
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vWorldXZ;")
-      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvWorldXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
+      .replace("#include <common>", "#include <common>\nvarying vec2 vWorldXZ; varying float vWorldY;")
+      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvec4 gWorld = modelMatrix * vec4(transformed, 1.0); vWorldXZ = gWorld.xz; vWorldY = gWorld.y;");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>
-        varying vec2 vWorldXZ;
+        varying vec2 vWorldXZ; varying float vWorldY;
         uniform sampler2D sandMap; uniform sampler2D sandNormal; uniform sampler2D sandArm; uniform sampler2D maskMap;
         uniform float sandScale; uniform vec3 sandTint; uniform vec3 grassTint; uniform float worldSize; uniform sampler2D macroMap;
         float groundMix() { return texture2D(maskMap, vWorldXZ / worldSize + 0.5).r; }`)
@@ -92,9 +98,16 @@ export function buildGround(assets: Assets) {
         float gm = groundMix();
         vec4 gTex = texture2D(map, vMapUv);
         vec4 sTex = texture2D(sandMap, vMapUv * sandScale);
-        vec3 col = mix(gTex.rgb * grassTint, sTex.rgb * sandTint, gm);
+        vec3 g = gTex.rgb * grassTint;
+        float gl = dot(g, vec3(0.3, 0.59, 0.11)); g = mix(vec3(gl), g, 1.2);
+        float sl = dot(sTex.rgb, vec3(0.3, 0.59, 0.11));
+        vec3 s = mix(vec3(sl), sTex.rgb, 0.35) * sandTint;
+        vec3 col = mix(g, s, gm);
         float macro = texture2D(macroMap, vWorldXZ / 70.0).r;
-        col *= 0.82 + 0.36 * macro;
+        col *= 0.90 + 0.20 * macro;
+        // distant hills: cooler, duller green so they recede behind the park
+        float hill = smoothstep(2.0, 12.0, vWorldY);
+        col = mix(col, col * vec3(0.62, 0.80, 0.60), hill);
         diffuseColor.rgb *= col;`)
       .replace("vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;", `
         vec3 mapN = mix(texture2D( normalMap, vNormalMapUv ).xyz, texture2D( sandNormal, vNormalMapUv * sandScale ).xyz, groundMix()) * 2.0 - 1.0;`)

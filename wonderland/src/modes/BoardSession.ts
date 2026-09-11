@@ -24,6 +24,7 @@ export class BoardSession {
   load(fen: string) {
     this.chess = new Chess(fen);
     this.selected = null;
+    this.locked = false; // a fresh position is never mid-animation or mid-picker
     this.board.clearHighlights();
     this.board.sync(this.chess);
   }
@@ -38,7 +39,13 @@ export class BoardSession {
       const legal = this.chess.moves({ square: this.selected, verbose: true }).find((m) => m.to === sq);
       if (legal) {
         let promotion: PieceSymbol | undefined;
-        if (legal.promotion) { this.locked = true; promotion = await this.ui.choosePromotion(legal.color); this.locked = false; }
+        if (legal.promotion) {
+          this.locked = true;
+          const p = await this.ui.choosePromotion(legal.color);
+          this.locked = false;
+          if (!p) { this.select(null); return; } // picker dismissed (Home mid-choice): abort the move cleanly
+          promotion = p;
+        }
         const m = await this.play({ from: this.selected, to: sq, promotion });
         if (m) this.onHumanMove?.(m);
         return;

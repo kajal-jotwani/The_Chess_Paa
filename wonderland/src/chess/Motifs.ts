@@ -7,11 +7,28 @@ export interface Hanging { square: Square; piece: PieceSymbol; attackers: number
 
 const other = (c: Color): Color => (c === "w" ? "b" : "w");
 
+/**
+ * Squares `by` can LEGALLY capture on right now.  chess.js's attackers() is a
+ * pseudo-attack test (pinned pieces and a king "attacking" a guarded square
+ * both count), which is exactly what a coach must not confuse with a real
+ * threat.  Flips the side to move if needed; null if the flipped position is
+ * unusable (shouldn't happen, but never let a coaching hint throw).
+ */
+export function legalCaptureTargets(chess: Chess, by: Color): Set<Square> | null {
+  if (chess.turn() === by) return new Set(chess.moves({ verbose: true }).filter((m) => m.captured).map((m) => m.to));
+  const f = chess.fen().split(" ");
+  f[1] = by;
+  f[3] = "-"; // en-passant square belongs to the side that just moved
+  try { return legalCaptureTargets(new Chess(f.join(" ")), by); } catch { return null; }
+}
+
 /** Pieces of `color` that can be taken for free (or by something cheaper). */
 export function hangingPieces(chess: Chess, color: Color): Hanging[] {
   const out: Hanging[] = [];
+  const legal = legalCaptureTargets(chess, other(color));
   for (const row of chess.board()) for (const cell of row) {
     if (!cell || cell.color !== color || cell.type === "k") continue;
+    if (legal && !legal.has(cell.square)) continue; // only a piece that can really be taken is hanging
     const att = chess.attackers(cell.square, other(color));
     if (!att.length) continue;
     const def = chess.attackers(cell.square, color);
@@ -23,16 +40,22 @@ export function hangingPieces(chess: Chess, color: Color): Hanging[] {
   return out.sort((a, b) => VALUE[b.piece] - VALUE[a.piece]);
 }
 
-/** Enemy pieces `color` could capture safely right now (undefended or cheaper attacker). */
-export function freeCaptures(chess: Chess, color: Color): { move: Move; gain: number }[] {
+export interface FreeCapture { move: Move; gain: number; free: boolean; }
+
+/**
+ * Enemy pieces `color` could capture profitably right now.  `free` means no
+ * legal recapture exists at all; otherwise the trade still comes out ahead
+ * (e.g. knight takes queen, knight is lost).
+ */
+export function freeCaptures(chess: Chess, color: Color): FreeCapture[] {
   if (chess.turn() !== color) return [];
-  const out: { move: Move; gain: number }[] = [];
+  const out: FreeCapture[] = [];
   for (const m of chess.moves({ verbose: true })) {
     if (!m.captured) continue;
-    const after = new Chess(m.after);
-    const recapture = after.attackers(m.to, other(color)).length > 0;
+    const after = new Chess(m.after); // opponent to move: their moves() are the real recaptures
+    const recapture = after.moves({ verbose: true }).some((r) => r.to === m.to);
     const gain = VALUE[m.captured] - (recapture ? VALUE[m.piece] : 0);
-    if (gain > 0) out.push({ move: m, gain });
+    if (gain > 0) out.push({ move: m, gain, free: !recapture });
   }
   return out.sort((a, b) => b.gain - a.gain);
 }

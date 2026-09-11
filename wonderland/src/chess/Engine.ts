@@ -15,10 +15,14 @@ export class Engine {
   private busy = false;
   private pending: Pending | null = null;
   private lines: string[] = [];
+  private readyFlag = false;
 
   constructor() {}
 
-  /** Start the worker (idempotent). */
+  /** True once the worker has answered `isready` — callers can show a "thinking" state before a cold start. */
+  get isReady() { return this.readyFlag; }
+
+  /** Start the worker (idempotent). No timeout by design: a slow-but-successful boot must still become usable. */
   private start(): Promise<void> {
     if (this.ready) return this.ready;
     this.ready = new Promise<void>((resolve, reject) => {
@@ -32,20 +36,24 @@ export class Engine {
         if (line === "uciok") resolve();
         this.pending?.onLine(line);
       };
-      w.onerror = (e) => { console.error("engine error", e); reject(e); };
+      w.onerror = (e) => { console.error("engine error", e); this.ready = null; reject(e); }; // null so a later call may retry once
       w.postMessage("uci");
     }).then(async () => {
-      this.send("setoption name Hash value 16");
-      this.send("setoption name UCI_ShowWDL value false");
-      await this.command("isready", (l) => l === "readyok");
+      await this.command(["setoption name Hash value 16", "setoption name UCI_ShowWDL value false", "isready"], (l) => l === "readyok");
+      this.readyFlag = true;
     });
     return this.ready;
   }
 
   private send(cmd: string) { this.worker?.postMessage(cmd); }
 
-  /** Send a command and wait until `done(line)` matches; collects all output lines. */
-  private command(cmd: string, done: (line: string) => boolean): Promise<string[]> {
+  /**
+   * Queue a bundle of commands and wait until `done(line)` matches; collects all
+   * output lines.  Everything a request needs (setoption / position / go) goes in
+   * one job, so two overlapping requests can never interleave a `position` between
+   * another's `position` and `go` and silently search the wrong FEN.
+   */
+  private command(cmds: string[], done: (line: string) => boolean): Promise<string[]> {
     return new Promise((resolve, reject) => {
       const run = () => new Promise<void>((next) => {
         this.lines = [];
@@ -53,7 +61,7 @@ export class Engine {
           onLine: (l) => { this.lines.push(l); if (done(l)) { this.pending = null; resolve(this.lines); next(); } },
           resolve, reject,
         };
-        this.send(cmd);
+        for (const c of cmds) this.send(c);
       });
       this.queue.push(run);
       this.drain();
@@ -69,19 +77,27 @@ export class Engine {
 
   async waitReady() { await this.start(); }
 
+  private clampSkill(skill: number) { return Math.max(0, Math.min(20, Math.round(skill))); }
+
+  /** Set the persistent Skill Level. Rarely needed — every evaluate()/bestMove() sets its own level. */
   async setSkill(skill: number) {
     await this.start();
-    this.send(`setoption name Skill Level value ${Math.max(0, Math.min(20, Math.round(skill)))}`);
+    this.send(`setoption name Skill Level value ${this.clampSkill(skill)}`);
   }
 
-  /** Evaluate a position; scores are from the side-to-move's point of view. */
-  async evaluate(fen: string, opts: { depth?: number; multipv?: number; movetime?: number } = {}): Promise<EvalResult> {
+  /**
+   * Evaluate a position; scores are from the side-to-move's point of view.
+   * `skill` defaults to full strength: Skill Level only degrades the final `bestmove`
+   * (the `info … pv` lines still carry the true best line), so analysis, hints and
+   * coaching must never inherit the level ChessPaa last played at.
+   */
+  async evaluate(fen: string, opts: { depth?: number; multipv?: number; movetime?: number; skill?: number } = {}): Promise<EvalResult> {
     await this.start();
     const depth = opts.depth ?? 12, multipv = opts.multipv ?? 1;
-    this.send(`setoption name MultiPV value ${multipv}`);
-    this.send(`position fen ${fen}`);
     const go = opts.movetime ? `go movetime ${opts.movetime}` : `go depth ${depth}`;
-    const out = await this.command(go, (l) => l.startsWith("bestmove"));
+    // setoption + position travel inside the queued job with `go`: sent eagerly they could land
+    // between an earlier request's `position` and its `go`, and that search would run on our FEN
+    const out = await this.command([`setoption name Skill Level value ${this.clampSkill(opts.skill ?? 20)}`, `setoption name MultiPV value ${multipv}`, `position fen ${fen}`, go], (l) => l.startsWith("bestmove"));
     const best = out.find((l) => l.startsWith("bestmove"))?.split(" ")[1] ?? null;
     const byPv = new Map<number, EngineLine>();
     let maxDepth = 0;
@@ -102,9 +118,7 @@ export class Engine {
 
   /** Pick a move for ChessPaa at a given skill; movetime keeps replies snappy. */
   async bestMove(fen: string, skill: number, movetime = 400): Promise<string | null> {
-    await this.setSkill(skill);
-    const r = await this.evaluate(fen, { movetime, multipv: 1 });
-    return r.bestMove;
+    return (await this.evaluate(fen, { movetime, multipv: 1, skill })).bestMove;
   }
 
   stop() { this.send("stop"); }

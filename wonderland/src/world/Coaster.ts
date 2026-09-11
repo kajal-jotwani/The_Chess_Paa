@@ -85,30 +85,62 @@ export class Coaster {
     }
     this.group.add(instanced(tieGeo, tieMat, tieMats));
 
-    // supports every ~5 m where the track is above ground level
-    const colGeo = new THREE.CylinderGeometry(0.16, 0.2, 1, 8).translate(0, 0.5, 0);
-    const colMat = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.5, metalness: 0.3 });
+    // supports every ~7.5 m where the track is above ground level: warm graphite
+    // steel bents — splayed A-frame legs on tall sections with X-bracing, and a
+    // concrete footer under every leg — so they read as a dark secondary
+    // structure under the orange track instead of a forest of white poles
+    const colGeo = new THREE.CylinderGeometry(0.13, 0.17, 1, 8).translate(0, 0.5, 0);
+    const colMat = new THREE.MeshStandardMaterial({ color: 0x5a5652, roughness: 0.6, metalness: 0.5 });
+    const footGeo = new THREE.BoxGeometry(1.0, 0.3, 1.0);
+    const footMat = new THREE.MeshStandardMaterial({ color: 0xbfb8ac, roughness: 0.9 });
     const cols: THREE.Matrix4[] = [];
+    const feet: THREE.Matrix4[] = [];
+    const up = new THREE.Vector3(0, 1, 0);
+    const strut = (from: THREE.Vector3, to: THREE.Vector3, r: number) =>
+      new THREE.Matrix4().compose(from, new THREE.Quaternion().setFromUnitVectors(up, to.clone().sub(from).normalize()), new THREE.Vector3(r, from.distanceTo(to), r));
     const stepC = Math.max(1, Math.round(7.5 / (this.length / fr.length)));
     for (let i = 0; i < fr.length; i += stepC) {
       const f = fr[i];
+      if (f.n.y < 0.2) continue; // inverted / near-vertical frames (top of the loop) — a column there would pierce the lower track
       const ground = heightAt(f.p.x, f.p.z);
       const top = f.p.y - 0.5;
-      if (top - ground < 0.8) continue;
-      // two legs for tall sections
-      const legs = top - ground > 14 ? [-1.2, 1.2] : [0];
-      for (const off of legs) {
-        const base = new THREE.Vector3(f.p.x + f.b.x * off, ground - 0.2, f.p.z + f.b.z * off);
-        const m = new THREE.Matrix4().compose(base, new THREE.Quaternion(), new THREE.Vector3(1, top - ground + 0.2, 1));
-        cols.push(m);
+      const H = top - ground;
+      if (H < 0.8) continue;
+      const side = new THREE.Vector3(f.b.x, 0, f.b.z).normalize();
+      const twoLeg = H > 7;
+      const legOff = (u: number) => (twoLeg ? THREE.MathUtils.lerp(2.0, 1.1, u) : 0); // splay: ±2.0 at the base → ±1.1 at the deck
+      const legPt = (s: number, u: number) => new THREE.Vector3(f.p.x, ground + u * H, f.p.z).addScaledVector(side, s * legOff(u));
+      for (const s of twoLeg ? [-1, 1] : [0]) {
+        cols.push(strut(legPt(s, 0).setY(ground - 0.2), legPt(s, 1), 1));
+        feet.push(new THREE.Matrix4().setPosition(legPt(s, 0).setY(ground + 0.1)));
       }
-      if (legs.length === 2) {
+      if (twoLeg) {
         // cross beam under the track
-        const beam = new THREE.Matrix4().compose(new THREE.Vector3(f.p.x, top - 0.3, f.p.z), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), f.b.clone()), new THREE.Vector3(0.8, 2.6, 0.8));
-        cols.push(beam);
+        cols.push(new THREE.Matrix4().compose(new THREE.Vector3(f.p.x, top - 0.3, f.p.z), new THREE.Quaternion().setFromUnitVectors(up, f.b.clone()), new THREE.Vector3(0.8, 2.6, 0.8)));
+        if (i % (2 * stepC) === 0 && H > 10) {
+          // X-brace every other tall bent (0.7x radius — thinner shimmers under SMAA-only AA)
+          cols.push(strut(legPt(-1, 0.25), legPt(1, 0.75), 0.7));
+          cols.push(strut(legPt(1, 0.25), legPt(-1, 0.75), 0.7));
+        }
       }
     }
     this.group.add(instanced(colGeo, colMat, cols));
+    const footers = instanced(footGeo, footMat, feet); footers.castShadow = false;
+    this.group.add(footers);
+
+    // chaser-light string on the outside of the rails, alternating sides so it reads as a real bulb run;
+    // visible from above and from the ride, and Atmosphere brightens it at dusk/night like every other bulb
+    const bulbGeo = new THREE.SphereGeometry(0.13, 6, 5);
+    const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff1b0, emissive: 0xffd36b, emissiveIntensity: 1.2 });
+    const stepB = Math.max(1, Math.round(2.4 / (this.length / fr.length)));
+    const bulbs: THREE.Matrix4[] = [];
+    for (let i = 0, k = 0; i < fr.length; i += stepB, k++) {
+      const f = fr[i];
+      bulbs.push(new THREE.Matrix4().setPosition(f.p.clone().addScaledVector(f.b, (k % 2 ? 1 : -1) * 0.72).addScaledVector(f.n, -0.05)));
+    }
+    const string = instanced(bulbGeo, bulbMat, bulbs);
+    string.castShadow = false;
+    this.group.add(string);
   }
 
   private buildStations() {
@@ -119,12 +151,14 @@ export class Coaster {
       const f = frameAt(this.frames, st.s, this.length);
       const g = new THREE.Group();
       g.position.copy(f.p).setY(heightAt(f.p.x, f.p.z));
-      g.lookAt(f.p.clone().add(f.t));
-      const platform = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.9, 14), woodMat);
-      platform.position.set(0, 0.45, 0);
+      // aim along the track's horizontal heading only: the frame point sits at rail height (1.5 m) while the
+      // shed sits on the ground, so looking at f.p + f.t would pitch the whole station up like a ramp
+      const flat = new THREE.Vector3(f.t.x, 0, f.t.z).normalize();
+      g.lookAt(g.position.clone().add(flat));
+      const platform = new THREE.Mesh(new THREE.BoxGeometry(6.5, 1.2, 14), woodMat);
+      platform.position.set(0, 0.6, 0);
       platform.receiveShadow = true; platform.castShadow = true;
       // a slot for the track through the platform middle: two platforms either side
-      platform.scale.set(1, 1, 1);
       const left = platform.clone(); left.scale.x = 0.36; left.position.x = -2.1;
       const right = platform.clone(); right.scale.x = 0.36; right.position.x = 2.1;
       g.add(left, right);
@@ -225,11 +259,16 @@ export class Coaster {
   /** Distance along the track from the current position to a station. */
   distanceTo(st: CoasterStation) { return ((st.s - this.s) % this.length + this.length) % this.length; }
 
+  /** True while the chain lift has the train (ride audio: clanks). */
+  get onLift() { return this.s > this.liftRange[0] && this.s < this.liftRange[1]; }
+  /** 0..1 — how hard the riders are throwing their arms up, i.e. how much of a drop this is. */
+  get dropIntensity() { return this.armLift; }
+
   update(dt: number) {
     this.time += dt;
     const f0 = frameAt(this.frames, this.s, this.length);
     const h = f0.p.y;
-    const onLift = this.s > this.liftRange[0] && this.s < this.liftRange[1];
+    const onLift = this.onLift;
     let target = onLift ? 4.2 : THREE.MathUtils.clamp(Math.sqrt(Math.max(0, 2 * G * (this.maxHeight + 3 - h))) * 0.72 + 2.5, 3.5, 26);
     // stations: ease in, hold if in ride mode
     let holding = false;

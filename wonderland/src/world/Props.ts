@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { merge, placed, instanced, rnd } from "./Geo";
 import { heightAt } from "./Ground";
-import { PARK, ATTRACTIONS } from "./Layout";
+import { PARK, ATTRACTIONS, nearPath } from "./Layout";
 import { sign, stripes } from "../core/Textures";
 
 const std = (color: number, roughness = 0.6, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
@@ -54,42 +54,52 @@ export function parkProps() {
   const bloomGeo = new THREE.SphereGeometry(0.16, 6, 5);
   const bloomMat = std(0xffffff, 0.7);
   const blooms: THREE.Matrix4[] = [], bloomCols: THREE.Color[] = [];
-  const palette = [0xff4f6d, 0xffc93c, 0xff8fb1, 0xb388ff, 0xffffff];
+  const palette = [0xe0506a, 0xf2c14e, 0xf08fae, 0xf07a3a]; // same massed-bed colours as Nature.ts
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2 + 0.13, r = 19.5;
     const x = Math.cos(a) * r, z = 8 + Math.sin(a) * r;
-    if (Math.abs(x) < 4 && z > 8) continue; // keep the entrance path clear
+    if (nearPath(x, z, 3.6)) continue; // keep the avenue lanes clear
     planters.push(new THREE.Matrix4().setPosition(x, heightAt(x, z), z));
-    for (let k = 0; k < 9; k++) { blooms.push(new THREE.Matrix4().setPosition(x + (rand() - 0.5) * 1.1, heightAt(x, z) + 0.95 + rand() * 0.15, z + (rand() - 0.5) * 1.1)); bloomCols.push(new THREE.Color(palette[Math.floor(rand() * palette.length)])); }
+    const col = new THREE.Color(palette[Math.floor(rand() * palette.length)]); // one colour per planter
+    for (let k = 0; k < 9; k++) { blooms.push(new THREE.Matrix4().setPosition(x + (rand() - 0.5) * 1.1, heightAt(x, z) + 0.95 + rand() * 0.15, z + (rand() - 0.5) * 1.1)); bloomCols.push(col.clone()); }
   }
   g.add(instanced(planterGeo, planterMat, planters));
   const bl = instanced(bloomGeo, bloomMat, blooms, bloomCols); bl.castShadow = false; g.add(bl);
-  // queue railings in front of every attraction board (zig-zag)
+  // queue switchbacks in front of every outlying board: three rows with alternating openings so the
+  // lane snakes — in through the far row's gap, along, back through the middle gap, out onto the board
   const postGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.0, 8).translate(0, 0.5, 0);
   const railGeo = new THREE.CylinderGeometry(0.025, 0.025, 1, 6).rotateZ(Math.PI / 2);
   const chrome = new THREE.MeshStandardMaterial({ color: 0xcfd6dd, roughness: 0.3, metalness: 0.9 });
   const posts: THREE.Matrix4[] = [], rails: THREE.Matrix4[] = [];
+  const HALF = 3, GAP = 1.4, ROWS = 3, PITCH = 1.2, POST_EVERY = 1.15;
+  const addRail = (p0: THREE.Vector3, p1: THREE.Vector3) => {
+    const len = p0.distanceTo(p1);
+    const n = Math.max(1, Math.round(len / POST_EVERY));
+    for (let k = 0; k <= n; k++) { const p = p0.clone().lerp(p1, k / n); p.y = heightAt(p.x, p.z); posts.push(new THREE.Matrix4().setPosition(p.x, p.y, p.z)); }
+    const mid = p0.clone().lerp(p1, 0.5); mid.y = heightAt(mid.x, mid.z) + 0.95;
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), p1.clone().sub(p0).normalize());
+    rails.push(new THREE.Matrix4().compose(mid, q, new THREE.Vector3(len, 1, 1)));
+  };
   for (const a of ATTRACTIONS) {
+    if (a.id === "grand_match") continue; // the hub board is the plaza itself — a queue here would fence off the avenue mouth
     const fwd = new THREE.Vector3(Math.sin(a.board.yaw), 0, Math.cos(a.board.yaw));
     const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
-    const base = a.board.pos.clone().addScaledVector(fwd, 6.5);
-    for (let row = 0; row < 3; row++) {
-      const p0 = base.clone().addScaledVector(right, -3).addScaledVector(fwd, row * 1.2);
-      const p1 = base.clone().addScaledVector(right, 3).addScaledVector(fwd, row * 1.2);
-      for (let k = 0; k <= 4; k++) { const p = p0.clone().lerp(p1, k / 4); p.y = heightAt(p.x, p.z); posts.push(new THREE.Matrix4().setPosition(p.x, p.y, p.z)); }
-      const mid = p0.clone().lerp(p1, 0.5); mid.y = heightAt(mid.x, mid.z) + 0.95;
-      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), right);
-      rails.push(new THREE.Matrix4().compose(mid, q, new THREE.Vector3(6, 1, 1)));
+    const base = a.board.pos.clone().addScaledVector(fwd, 5.5);
+    const at = (r: number, f: number) => base.clone().addScaledVector(right, r).addScaledVector(fwd, f);
+    for (let row = 0; row < ROWS; row++) {
+      const openRight = row % 2 === 0; // rows 0 and 2 open at +right, row 1 at -right → an S-path
+      addRail(at(openRight ? -HALF : -HALF + GAP, row * PITCH), at(openRight ? HALF - GAP : HALF, row * PITCH));
     }
+    for (const s of [-HALF, HALF]) addRail(at(s, 0), at(s, (ROWS - 1) * PITCH)); // end rails close both sides
   }
   g.add(instanced(postGeo, chrome, posts), instanced(railGeo, chrome, rails));
   // bins + arrow signposts along the paths
   const binGeo = merge([placed(new THREE.CylinderGeometry(0.35, 0.3, 0.9, 12), 0, 0.45, 0), placed(new THREE.CylinderGeometry(0.38, 0.38, 0.08, 12), 0, 0.94, 0)]);
   const bins: THREE.Matrix4[] = [];
-  for (const [x, z] of [[-5, 52], [5, 52], [-5, 36], [5, 36], [16, 32], [-16, 32], [-30, 40], [22, 44], [34, -52], [-22, -52], [-40, 0], [40, 10]]) bins.push(new THREE.Matrix4().setPosition(x, heightAt(x, z), z));
+  for (const [x, z] of [[-10, 52], [10, 52], [-4, 46], [4, 46], [16, 32], [-16, 32], [-31, 47], [20, 47], [34, -52], [-22, -52], [-31, -2], [40, 10]]) bins.push(new THREE.Matrix4().setPosition(x, heightAt(x, z), z));
   g.add(instanced(binGeo, std(0x2f6fa8, 0.5, 0.2), bins));
   const postMat = std(0x8b5a2b, 0.8);
-  const signSpots: [number, number, string[], number][] = [[6, 44, ["🏰 Piece Academy ➜", "🎢 Tactics Coaster ➜"], -0.6], [-6, 20, ["🎡 Endgame Wheel ➜", "🚂 Puzzle Train ➜"], 0.7], [-22, -2, ["🚂 Puzzle Train ➜"], 1.6], [24, -24, ["🏰 Piece Academy ➜"], -0.4]];
+  const signSpots: [number, number, string[], number][] = [[6, 44, ["🏰 Piece Academy ➜", "🎢 Tactics Coaster ➜"], -0.6], [-11, 21, ["🎡 Endgame Wheel ➜", "🚂 Puzzle Train ➜"], 0.7], [-24, 10, ["🚂 Puzzle Train ➜"], 1.6], [24, -24, ["🏰 Piece Academy ➜"], -0.4]];
   for (const [x, z, labels, ry] of signSpots) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 3.0, 8), postMat); post.position.set(x, heightAt(x, z) + 1.5, z); post.castShadow = true; g.add(post);
     labels.forEach((text, i) => {
@@ -130,7 +140,8 @@ export function rideArches() {
   mk("🎡 ENDGAME WHEEL", PARK.ferris.x, PARK.ferris.z + 14, 0, "#2ec4c6");
   mk("🎠 KNIGHT CAROUSEL", PARK.carousel.x + 8, PARK.carousel.z + 6, -0.6, "#ff6b8a");
   mk("🎪 CHESS CIRCUS", PARK.bigTop.x, PARK.bigTop.z + 17, 0, "#e8253d");
-  mk("🚂 PUZZLE TRAIN", PARK.trainStation.x + 6, PARK.trainStation.z + 2, Math.PI / 2, "#4aa3ff");
+  // astride the station walk-up (Layout path (-42,20)→(-47,26)), facing arriving guests, 4.5 m east of the rail
+  mk("🚂 PUZZLE TRAIN", -44.5, 23, 2.45, "#4aa3ff");
   g.name = "arches";
   return g;
 }

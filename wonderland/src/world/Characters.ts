@@ -74,6 +74,13 @@ export class Folk {
     this.armR?.set(X, -s * 0.7);
     if (this.body) { this.body.rotation.z = s * 0.06; this.body.position.y = Math.abs(Math.sin(t * 7 * speed + this.phase)) * 0.06; }
   }
+  /** standing still: arms settle, a slow breathing sway */
+  idle(t: number) {
+    const s = Math.sin(t * 1.3 + this.phase);
+    this.armL?.set(X, s * 0.08);
+    this.armR?.set(X, -s * 0.08);
+    if (this.body) { this.body.rotation.z = s * 0.015; this.body.position.y = 0; }
+  }
   cheer(t: number) {
     const s = Math.sin(t * 9 + this.phase);
     this.armL?.set(Z, -2.2 + s * 0.3);
@@ -129,7 +136,7 @@ export class ChessPaa {
     this.blend = THREE.MathUtils.damp(this.blend, target, 6, dt);
     const b = this.blend;
     const breathe = Math.sin(t * 1.6) * 0.02;
-    this.root.scale.set(1, 1 + breathe, 1);
+    this.root.scale.y = this.root.scale.x * (1 + breathe); // derive from x so a seated setScalar(0.72) survives
     const idleHead = Math.sin(t * 0.6) * 0.18;
     switch (this.mood) {
       case "talk": {

@@ -3,28 +3,15 @@ import { Assets, pbr } from "../core/Assets";
 import { cloud, glow, leafCluster, grassBlades } from "../core/Textures";
 import { instanced, merge, placed, rnd } from "./Geo";
 import { heightAt } from "./Ground";
-import { PARK, pathNetwork, ATTRACTIONS } from "./Layout";
+import { PARK, pathNetwork, ATTRACTIONS, FOUNTAIN, onPaving, nearPath } from "./Layout";
 
 export type AvoidFn = (x: number, z: number) => boolean;
-
-function nearPath(x: number, z: number, dist: number) {
-  for (const path of pathNetwork()) {
-    for (let i = 0; i < path.length - 1; i++) {
-      const a = path[i], b = path[i + 1];
-      const abx = b.x - a.x, abz = b.z - a.z;
-      const t = THREE.MathUtils.clamp(((x - a.x) * abx + (z - a.z) * abz) / (abx * abx + abz * abz), 0, 1);
-      const px = a.x + abx * t, pz = a.z + abz * t;
-      if (Math.hypot(x - px, z - pz) < dist) return true;
-    }
-  }
-  return false;
-}
 
 export function defaultAvoid(extra: AvoidFn): AvoidFn {
   const keep: [number, number, number][] = [
     [PARK.castle.x, PARK.castle.z, 18], [PARK.ferris.x, PARK.ferris.z, 16], [PARK.bigTop.x, PARK.bigTop.z, 17], [PARK.carousel.x, PARK.carousel.z, 11],
     [PARK.club.x, PARK.club.z, 7], [PARK.iceCream.x, PARK.iceCream.z, 4], [PARK.foodTruck.x, PARK.foodTruck.z, 6], [PARK.gate.x, PARK.gate.z, 12], [PARK.ticketBooth.x, PARK.ticketBooth.z, 4],
-    [PARK.trainStation.x, PARK.trainStation.z, 10], [16, 14, 6],
+    [PARK.trainStation.x, PARK.trainStation.z, 10], [FOUNTAIN.x, FOUNTAIN.z, 9], [16, 14, 6],
   ];
   for (const a of ATTRACTIONS) keep.push([a.board.pos.x, a.board.pos.z, 9]);
   return (x, z) => {
@@ -55,19 +42,28 @@ export function trees(assets: Assets, avoid: AvoidFn) {
     }
   }
   const roundGeo = merge(cards);
-  const pineGeo = merge([placed(new THREE.ConeGeometry(2.2, 3.2, 10), 0, 3.6, 0), placed(new THREE.ConeGeometry(1.7, 3.0, 10), 0, 5.4, 0), placed(new THREE.ConeGeometry(1.1, 2.6, 10), 0, 7.0, 0)]);
-  const leafMat = new THREE.MeshStandardMaterial({ map: leafCluster(0.3), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, envMapIntensity: 0.5, color: 0xffffff });
-  const pineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
+  // pines: three tiers, the middle one nudged off-axis so they don't read as a stack of paper cones
+  const pineGeo = merge([placed(new THREE.ConeGeometry(2.2, 3.2, 10), 0, 3.6, 0), placed(new THREE.ConeGeometry(1.7, 3.0, 10), 0.25, 5.4, -0.2), placed(new THREE.ConeGeometry(1.1, 2.6, 10), 0, 7.0, 0)]);
+  {
+    // bake a dark-to-light vertical gradient as a greyscale vertex colour: three multiplies
+    // vColor by instanceColor, so this gives every pine shading without any shader code
+    const pp = pineGeo.attributes.position; const col = new Float32Array(pp.count * 3);
+    for (let i = 0; i < pp.count; i++) { const v = 0.45 + 0.6 * THREE.MathUtils.smoothstep(pp.getY(i), 2.4, 8.2); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = v; }
+    pineGeo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  }
+  const leafMat = new THREE.MeshStandardMaterial({ map: leafCluster(0.3), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, envMapIntensity: 0.3, color: 0xffffff });
+  const pineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, metalness: 0, envMapIntensity: 0.3 });
   const trunks: THREE.Matrix4[] = [], rounds: THREE.Matrix4[] = [], pines: THREE.Matrix4[] = [];
   const roundCols: THREE.Color[] = [], pineCols: THREE.Color[] = [];
-  const place = (x: number, z: number) => {
+  const place = (x: number, z: number, scale = 1) => {
     const y = heightAt(x, z);
-    const s = 0.75 + rand() * 0.6;
+    const s = (0.65 + rand() * 0.9) * scale;
     const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI * 2);
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y - 0.1, z), rot, new THREE.Vector3(s, s, s));
     trunks.push(m);
-    if (rand() < 0.62) { rounds.push(m); roundCols.push(new THREE.Color().setHSL(0.27 + rand() * 0.08, 0.5, 0.5 + rand() * 0.25)); }
-    else { pines.push(m); pineCols.push(new THREE.Color().setHSL(0.36 + rand() * 0.05, 0.45, 0.22 + rand() * 0.1)); }
+    // natural mid greens, coherent with the hedges (0x3f8f3a) and bushes
+    if (rand() < 0.62) { rounds.push(m); roundCols.push(new THREE.Color().setHSL(0.26 + rand() * 0.07, 0.48, 0.32 + rand() * 0.16)); }
+    else { pines.push(m); pineCols.push(new THREE.Color().setHSL(0.29 + rand() * 0.05, 0.55, 0.15 + rand() * 0.08)); }
   };
   // outer ring
   for (let i = 0; i < 520; i++) {
@@ -91,6 +87,14 @@ export function trees(assets: Assets, avoid: AvoidFn) {
     if (avoid(x, z)) continue;
     place(x, z);
   }
+  // the ridge: bigger trees on the hills so the skyline is tree-lined, not bald
+  // (appended last so the inner-park placement above keeps its seeded layout)
+  for (let i = 0; i < 480; i++) {
+    const a = rand() * Math.PI * 2, r = 165 + rand() * 80;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r * 0.95;
+    if (avoid(x, z)) continue;
+    place(x, z, 1.15 + rand() * 0.65);
+  }
   g.add(instanced(trunkGeo, trunkMat, trunks), instanced(roundGeo, leafMat, rounds, roundCols), instanced(pineGeo, pineMat, pines, pineCols));
   g.name = "trees";
   return g;
@@ -102,10 +106,11 @@ export function shrubsAndFlowers(avoid: AvoidFn) {
   const bushGeo = new THREE.SphereGeometry(0.9, 10, 8).scale(1, 0.7, 1).translate(0, 0.45, 0);
   const bushMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
   const bushes: THREE.Matrix4[] = [], bushCols: THREE.Color[] = [];
-  const flowerGeo = merge([placed(new THREE.SphereGeometry(0.09, 6, 5), 0, 0.26, 0), placed(new THREE.CylinderGeometry(0.015, 0.015, 0.26, 4), 0, 0.13, 0), placed(new THREE.SphereGeometry(0.16, 6, 5).scale(1, 0.4, 1), 0, 0.05, 0)]);
+  const flowerGeo = merge([placed(new THREE.SphereGeometry(0.13, 6, 5), 0, 0.26, 0), placed(new THREE.CylinderGeometry(0.015, 0.015, 0.26, 4), 0, 0.13, 0), placed(new THREE.SphereGeometry(0.16, 6, 5).scale(1, 0.4, 1), 0, 0.05, 0)]);
   const flowerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
   const flowers: THREE.Matrix4[] = [], flowerCols: THREE.Color[] = [];
-  const palette = [0xff4f6d, 0xffc93c, 0xff8fb1, 0xb388ff, 0xffffff, 0xff7a1a];
+  // real park planting is massed: one colour per bed, not confetti per bloom
+  const palette = [0xe0506a, 0xf2c14e, 0xf08fae, 0xf07a3a];
   for (const path of pathNetwork()) for (let i = 0; i < path.length - 1; i++) {
     const a = path[i], b = path[i + 1];
     const len = a.distanceTo(b), n = Math.floor(len / 7);
@@ -116,26 +121,30 @@ export function shrubsAndFlowers(avoid: AvoidFn) {
       for (const side of [-1, 1]) {
         const x = px + dx * side * 3.6 + (rand() - 0.5), z = pz + dz * side * 3.6 + (rand() - 0.5);
         if (avoid(x, z) && !nearPath(x, z, 5)) continue;
+        if (onPaving(x, z, 1.2)) continue; // planting stops at the plaza kerb — never on cobbles or in the fountain
         if (rand() < 0.5) {
           const s = 0.6 + rand() * 0.7;
           bushes.push(new THREE.Matrix4().compose(new THREE.Vector3(x, heightAt(x, z), z), new THREE.Quaternion(), new THREE.Vector3(s, s, s)));
           bushCols.push(new THREE.Color().setHSL(0.28 + rand() * 0.06, 0.55, 0.36 + rand() * 0.1));
         }
-        for (let f = 0; f < 10; f++) {
+        const bedCol = new THREE.Color(palette[Math.floor(rand() * palette.length)]);
+        for (let f = 0; f < 6; f++) {
           const fx = x + (rand() - 0.5) * 2.0, fz = z + (rand() - 0.5) * 2.0;
+          if (onPaving(fx, fz, 0.6)) continue;
           flowers.push(new THREE.Matrix4().setPosition(fx, heightAt(fx, fz), fz));
-          flowerCols.push(new THREE.Color(palette[Math.floor(rand() * palette.length)]));
+          flowerCols.push(bedCol.clone());
         }
       }
     }
   }
-  // flower beds around the plaza
-  for (let i = 0; i < 520; i++) {
+  // flower beds around the plaza: twelve 30° arcs, each a solid block of one colour
+  const arcCols = Array.from({ length: 12 }, () => new THREE.Color(palette[Math.floor(rand() * palette.length)]));
+  for (let i = 0; i < 320; i++) {
     const a = rand() * Math.PI * 2, r = 25 + rand() * 2.2;
     const x = Math.cos(a) * r, z = 8 + Math.sin(a) * r;
     if (nearPath(x, z, 3)) continue;
     flowers.push(new THREE.Matrix4().setPosition(x, heightAt(x, z), z));
-    flowerCols.push(new THREE.Color(palette[Math.floor(rand() * palette.length)]));
+    flowerCols.push(arcCols[Math.floor((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 6)) % 12].clone());
   }
   const bm = instanced(bushGeo, bushMat, bushes, bushCols);
   const fm = instanced(flowerGeo, flowerMat, flowers, flowerCols); fm.castShadow = false;
@@ -147,15 +156,18 @@ export function shrubsAndFlowers(avoid: AvoidFn) {
 export class Sky3D {
   readonly group = new THREE.Group();
   private clouds: THREE.Sprite[] = [];
+  private cmat: THREE.SpriteMaterial;
   private balloons: { g: THREE.Group; base: THREE.Vector3; phase: number }[] = [];
   constructor() {
     const rand = rnd(9);
-    const cmat = new THREE.SpriteMaterial({ map: cloud(), transparent: true, opacity: 0.92, depthWrite: false });
-    for (let i = 0; i < 14; i++) {
-      const s = new THREE.Sprite(cmat);
-      const sc = 40 + rand() * 50;
-      s.scale.set(sc, sc * 0.55, 1);
-      s.position.set((rand() - 0.5) * 520, 70 + rand() * 50, (rand() - 0.5) * 520);
+    // a few wide, high, half-transparent clouds that the theme tints — the HDR domes
+    // already carry their own clouds, so these only add parallax, never a white blob
+    this.cmat = new THREE.SpriteMaterial({ map: cloud(), transparent: true, opacity: 0.5, depthWrite: false });
+    for (let i = 0; i < 6; i++) {
+      const s = new THREE.Sprite(this.cmat);
+      const sc = 60 + rand() * 60;
+      s.scale.set(sc, sc * 0.36, 1);
+      s.position.set((rand() - 0.5) * 520, 120 + rand() * 40, (rand() - 0.5) * 520);
       this.clouds.push(s); this.group.add(s);
     }
     const bmat = [0xe84a5f, 0xffc93c, 0x2ec4c6, 0x7bc96f, 0xff8fb1, 0x8e7cc3].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.3, metalness: 0.05, envMapIntensity: 1.2 }));
@@ -178,6 +190,8 @@ export class Sky3D {
     }
     this.group.name = "sky3d";
   }
+  /** Theme hook: clouds are unlit sprites, so the atmosphere tints them by hand. */
+  setTint(hex: number, opacity: number) { this.cmat.color.setHex(hex); this.cmat.opacity = opacity; }
   update(dt: number, t: number) {
     for (const c of this.clouds) { c.position.x += dt * 0.9; if (c.position.x > 280) c.position.x = -280; }
     for (const b of this.balloons) {
@@ -246,6 +260,7 @@ export function grassTufts(avoid: AvoidFn, count = 2600) {
     const x = Math.cos(a) * r, z = 6 + Math.sin(a) * r * 0.9;
     if (Math.hypot(x, z - 8) < 34) continue;
     if (nearPath(x, z, 4.2)) continue;
+    if (onPaving(x, z, 0.5)) continue;
     if (avoid(x, z)) continue;
     const s = 0.7 + rand() * 0.8;
     mats.push(new THREE.Matrix4().compose(new THREE.Vector3(x, heightAt(x, z), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI), new THREE.Vector3(s, s * (0.8 + rand() * 0.5), s)));

@@ -26,8 +26,9 @@ export class AcademyMode implements Mode {
 
   exit() {
     this.stopSong();
+    this.lesson = null; this.inTryIt = false; // showLine()/tryIt() continuations compare against these and bail
     this.s.onHumanMove = undefined; this.s.pickFilter = undefined;
-    this.s.board.interactive = false; this.s.board.clearHighlights();
+    this.s.board.interactive = false; this.s.board.clearHighlights(); this.s.board.detach();
     this.ctx.ui.hidePanel(); this.ctx.ui.clearHud();
   }
 
@@ -89,6 +90,8 @@ export class AcademyMode implements Mode {
         this.ctx.sound.great();
         this.ctx.progress.addStar("academy:" + L.piece); this.ctx.progress.addStar("academy");
         ui.setStars(this.ctx.progress.stars);
+        this.ctx.progress.addTicket(1); ui.setTickets(this.ctx.progress.tickets);
+        setTimeout(() => this.ctx.sound.coin(), 350); // after the cheer
         world.chessPaa.mood = "cheer"; world.chessPaa.say(2.5);
         this.s.board.interactive = false; this.s.board.clearHighlights();
         const next = LESSONS[(LESSONS.indexOf(L) + 1) % LESSONS.length];
@@ -101,7 +104,9 @@ export class AcademyMode implements Mode {
         this.ctx.sound.oops();
         ui.say(pick(["Not quite — try a green square!", "Almost! Aim for the green squares.", "Nearly! Where can it really go?"]));
         await wait(0.7);
+        if (this.lesson !== L || !this.inTryIt) return;
         await this.s.undo();
+        if (this.lesson !== L || !this.inTryIt) return;
         this.s.board.glow(L.tryIt.targets, 0x35d07f);
         this.s.board.hint(L.tryIt.piece);
       }

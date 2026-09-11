@@ -37,7 +37,7 @@ export const ATTRACTIONS: Attraction[] = [
   },
   {
     id: "train", name: "Puzzle Train", emoji: "🚂", tagline: "Puzzle rush! How many carriages can you fill?",
-    anchor: V(-52, 8, -10), board: { pos: V(-44, 0, 4), yaw: Math.PI / 2 }, camera: { pos: V(-28, 9, 4), look: V(-46, 1, 4) },
+    anchor: V(-51, 8, 26), board: { pos: V(-44, 0, 4), yaw: Math.PI / 2 }, camera: { pos: V(-28, 9, 4), look: V(-46, 1, 4) },
   },
   {
     id: "grand_match", name: "Grand Match", emoji: "♟️", tagline: "Play a real game with ChessPaa",
@@ -55,21 +55,57 @@ export const PARK = {
   foodTruck: V(26, 0, 60),
   carousel: V(-24, 0, 40),
   bigTop: V(26, 0, -28),
-  castle: V(44, 0, -86),
+  castle: V(44, 0, -92),
   ferris: V(-16, 0, -92),
   lake: { center: V(-46, 0, -56), rx: 22, rz: 16 },
-  trainOval: { center: V(-52, 0, 18), rx: 20, rz: 28 },
-  trainStation: V(-52, 0, -10),
+  // the oval keeps clear of the coaster's Puzzle Train stop (north) and the board plaza (east);
+  // the station sits on the long east side where the curve is gentlest, so a straight deck fits
+  trainOval: { center: V(-64, 0, 26), rx: 13, rz: 21 },
+  trainStation: V(-51, 0, 26),
   umbrella: V(4.5, 0, 3.5),
   sandRadius: 96,
 };
+
+/** Cobbled plazas (single source of truth for Details.paving + planting exclusion). */
+export const PAVED: { x: number; z: number; r: number }[] = [
+  { x: 0, z: 8, r: 24 },
+  ...ATTRACTIONS.filter((a) => a.id !== "grand_match").map((a) => ({ x: a.board.pos.x, z: a.board.pos.z, r: 9.5 })),
+  { x: PARK.carousel.x, z: PARK.carousel.z, r: 9.5 },
+  { x: PARK.gate.x, z: PARK.gate.z - 10, r: 12 },
+];
+
+/** The avenue forks around the fountain; its rond-point island is kept clear of planting and fences. */
+export const FOUNTAIN = V(0, 0, 36);
+const FOUNTAIN_CLEAR = 6.5; // basin r=4.5 + walk-around
+
+/** True when (x, z) lies on a cobbled plaza or the fountain's walk-around — nothing should be planted there. */
+export function onPaving(x: number, z: number, margin = 0.8): boolean {
+  if (Math.hypot(x - FOUNTAIN.x, z - FOUNTAIN.z) < FOUNTAIN_CLEAR) return true;
+  for (const d of PAVED) if (Math.hypot(x - d.x, z - d.z) < d.r + margin) return true;
+  return false;
+}
+
+let pathCache: THREE.Vector3[][] | null = null;
+/** True when (x, z) is within `dist` of any walkway centreline. */
+export function nearPath(x: number, z: number, dist: number): boolean {
+  const net = pathCache ?? (pathCache = pathNetwork());
+  for (const path of net) {
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i], b = path[i + 1];
+      const abx = b.x - a.x, abz = b.z - a.z;
+      const t = THREE.MathUtils.clamp(((x - a.x) * abx + (z - a.z) * abz) / (abx * abx + abz * abz), 0, 1);
+      if (Math.hypot(x - (a.x + abx * t), z - (a.z + abz * t)) < dist) return true;
+    }
+  }
+  return false;
+}
 
 /** Coaster stations in ride order (arc positions are resolved at build time). */
 export const COASTER_STATIONS: { id: AttractionId | "main"; name: string; pos: THREE.Vector3 }[] = [
   { id: "main", name: "Wonderland Station", pos: V(30, 1.5, 34) },
   { id: "academy", name: "Piece Academy", pos: V(44, 1.5, -58) },
   { id: "endgame", name: "Endgame Wheel", pos: V(-16, 1.5, -58) },
-  { id: "train", name: "Puzzle Train", pos: V(-64, 1.5, -4) },
+  { id: "train", name: "Puzzle Train", pos: V(-67, 1.5, -8) },
 ];
 
 /** Coaster centreline control points (closed loop). Station points sit flat at y=1.5. */
@@ -88,8 +124,8 @@ export function coasterControlPoints(): THREE.Vector3[] {
   }
   pts.push(V(-2, 2.5, -60), V(-16, 1.5, -58),               // endgame station
     V(-30, 4, -62), V(-42, 14, -70), V(-54, 18, -64), V(-66, 10, -46), // over the lake
-    V(-74, 20, -28), V(-72, 8, -12), V(-64, 1.5, -4),       // puzzle-train station
-    V(-52, 2.5, 6), V(-40, 10, 22), V(-26, 20, 36), V(-10, 16, 34), // helix out
+    V(-74, 20, -28), V(-75, 8, -18), V(-67, 1.5, -8),       // puzzle-train station (north of the train oval)
+    V(-52, 3.5, 3), V(-40, 10, 22), V(-26, 20, 36), V(-10, 16, 34), // swoop past the train board, helix out
     V(0, 12, 16), V(8, 9, 20), V(16, 4, 30));                // fly over the plaza and home
   return pts;
 }
@@ -97,13 +133,18 @@ export function coasterControlPoints(): THREE.Vector3[] {
 /** Walkway centrelines for the ground mask + wandering folk. */
 export function pathNetwork(): THREE.Vector3[][] {
   return [
-    [V(0, 0, 80), V(0, 0, 60), V(0, 0, 30), V(0, 0, 14)],
-    [V(0, 0, 30), V(14, 0, 34), V(26, 0, 40)],
-    [V(0, 0, 30), V(-14, 0, 34), V(-24, 0, 40)],
-    [V(0, 0, 14), V(-20, 0, 6), V(-40, 0, 2)],
+    // main avenue: forks around the fountain rond-point at (0, 36) and rejoins at the plaza
+    [V(0, 0, 80), V(0, 0, 58), V(-9, 0, 46), V(-9, 0, 27), V(0, 0, 14)],
+    [V(0, 0, 58), V(9, 0, 46), V(9, 0, 27), V(0, 0, 14)],
+    [V(9, 0, 27), V(14, 0, 34), V(26, 0, 40)],
+    [V(-9, 0, 27), V(-14, 0, 34), V(-24, 0, 40)],
+    // to the Puzzle Train: arrives at the queue entrance, skirts the board plaza, ends 4 m short of the rail
+    [V(0, 0, 14), V(-20, 0, 7), V(-33, 0, 1), V(-35, 0, 11), V(-42, 0, 20), V(-47, 0, 26)],
     [V(0, 0, 14), V(20, 0, -6), V(30, 0, -30), V(40, 0, -56), V(44, 0, -66)],
     [V(0, 0, 14), V(-4, 0, -14), V(-12, 0, -40), V(-16, 0, -60)],
     [V(-16, 0, -60), V(-30, 0, -40), V(-46, 0, -20), V(-46, 0, -4)],
     [V(26, 0, 40), V(30, 0, 48)],
+    // drawbridge → academy board (opens the hedge ring on the castle side)
+    [V(44, 0, -78), V(43, 0, -74)],
   ];
 }

@@ -93,6 +93,13 @@ export function cloud(size = 256) {
       g.addColorStop(0, "rgba(255,255,255,0.95)"); g.addColorStop(0.6, "rgba(255,255,255,0.8)"); g.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x * size, y * size, r * size, 0, Math.PI * 2); ctx.fill();
     }
+    // shade the underside so it reads as a cloud, not a cotton ball — painted only
+    // where puffs already exist (source-atop), never clipping the top away
+    ctx.globalCompositeOperation = "source-atop";
+    const sh = ctx.createLinearGradient(0, size * 0.5, 0, size * 0.95);
+    sh.addColorStop(0, "rgba(170,180,200,0)"); sh.addColorStop(1, "rgba(170,180,200,0.5)");
+    ctx.fillStyle = sh; ctx.fillRect(0, 0, size, size);
+    ctx.globalCompositeOperation = "source-over";
     return toTexture(c, true, false);
   });
 }
@@ -196,7 +203,7 @@ export function leafCluster(hue = 0.3, size = 256) {
       const d = Math.hypot(x - size / 2, y - size / 2) / (size / 2);
       if (d > 0.98) continue;
       const len = 10 + r() * 16, w = 5 + r() * 6, a = r() * Math.PI * 2;
-      const l = 0.28 + r() * 0.26 - d * 0.1;
+      const l = 0.22 + r() * 0.22 - d * 0.12;
       ctx.fillStyle = `hsl(${(hue + (r() - 0.5) * 0.06) * 360}, ${52 + r() * 25}%, ${l * 100}%)`;
       ctx.save(); ctx.translate(x, y); ctx.rotate(a);
       ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(len / 2, -w, len, 0); ctx.quadraticCurveTo(len / 2, w, 0, 0); ctx.fill();

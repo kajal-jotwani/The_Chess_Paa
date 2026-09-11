@@ -17,7 +17,7 @@ export const LESSONS: PieceLesson[] = [
       "I march straight forward, never back at all.",
       "One step at a time — but on my very first go,",
       "I can hop two squares, ready, set, GO!",
-      "I capture sideways, diagonally, with a cheer,",
+      "I capture on the slant — diagonally — with a cheer,",
       "And if I reach the end… a QUEEN appears!",
     ],
     beats: [
@@ -88,7 +88,7 @@ export const LESSONS: PieceLesson[] = [
       { fen: "k7/8/8/8/3R2p1/8/8/7K w - - 0 1", glow: ["e4", "f4", "g4"], from: "d4", to: "g4", note: "Stopped by a piece? Capture it, but no jumping." },
       { fen: "k7/8/8/8/8/8/8/4K2R w K - 0 1", glow: ["e1", "h1", "f1", "g1"], from: "e1", to: "g1", note: "Castling: the king hops two squares and the rook leaps over to guard him." },
     ],
-    tryIt: { fen: "k7/8/8/8/8/8/8/R6K w - - 0 1", goal: "Roll the rook to the ⭐ square.", targets: ["a8", "a7", "a6"], piece: "a1", hint: "Straight up the a-file." },
+    tryIt: { fen: "7k/8/8/8/8/8/8/R6K w - - 0 1", goal: "Roll the rook to the ⭐ square.", targets: ["a8", "a7", "a6"], piece: "a1", hint: "Straight up the a-file." },
   },
   {
     piece: "q", name: "Queen", emoji: "♕",
@@ -126,7 +126,8 @@ export const LESSONS: PieceLesson[] = [
       { fen: "k7/8/8/8/3K4/8/8/8 w - - 0 1", glow: ["e5"], from: "d4", to: "e5", note: "One careful step at a time." },
       { fen: "k7/8/8/8/3K4/8/8/8 w - - 0 1", glow: ["c3", "c4", "c5", "d3", "d5", "e3", "e4", "e5"], note: "He may never step onto an attacked square." },
       { fen: "k7/8/8/8/8/8/8/3r1K2 w - - 0 1", glow: ["f1", "d1"], note: "CHECK! The rook attacks the king. He must get out of it right away." },
-      { fen: "k7/8/8/8/8/8/5q2/7K w - - 0 1", glow: ["h1", "f2"], note: "CHECKMATE: attacked, and no escape at all. The game is over." },
+      // a real mate (the old f2 queen was the textbook STALEMATE); the black king next to her shows why she can't just be taken
+      { fen: "8/8/8/8/8/5k2/6q1/7K w - - 0 1", glow: ["h1", "g2", "f3"], note: "CHECKMATE: the queen attacks the king, every escape square is covered, and her own king guards her so she can't be taken. The game is over." },
     ],
     tryIt: { fen: "k7/8/8/8/8/8/8/3r1K2 w - - 0 1", goal: "The king is in CHECK. Step him to a safe ⭐ square.", targets: ["e2", "f2", "g2"], piece: "f1", hint: "Any square the rook can't see — off the first rank!" },
   },

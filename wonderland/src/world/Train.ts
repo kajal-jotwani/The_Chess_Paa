@@ -45,7 +45,7 @@ export class Train {
     for (let i = 0; i < this.frames.length; i += 2) { const f = this.frames[i]; mats.push(new THREE.Matrix4().makeBasis(f.b, f.n, f.t).setPosition(f.p)); }
     this.group.add(instanced(sleeperGeo, sleeperMat, mats));
 
-    // station at the north end of the oval
+    // station on the long east side of the oval (gentlest curvature, so a straight deck sits flush)
     const st = PARK.trainStation;
     let best = 0, bd = 1e9;
     this.frames.forEach((f) => { const d = f.p.distanceTo(st); if (d < bd) { bd = d; best = f.s; } });
@@ -54,16 +54,19 @@ export class Train {
     this.stationPos = sf.p.clone();
     const platform = new THREE.Group();
     platform.position.copy(sf.p).setY(heightAt(sf.p.x, sf.p.z));
-    platform.lookAt(sf.p.clone().add(sf.t));
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.7, 12), new THREE.MeshStandardMaterial({ color: 0xc89b6a, roughness: 0.85 }));
-    deck.position.set(-2.4, 0.35, 0); deck.receiveShadow = true; deck.castShadow = true;
+    // horizontal heading only — the frame point is at rail height, so aiming at it would pitch the deck
+    platform.lookAt(platform.position.clone().add(new THREE.Vector3(sf.t.x, 0, sf.t.z).normalize()));
+    // deck inside the loop; 8 m long so the rail's inward drift at the ends never cuts into it
+    const DECK_X = -2.7;
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.7, 8), new THREE.MeshStandardMaterial({ color: 0xc89b6a, roughness: 0.85 }));
+    deck.position.set(DECK_X, 0.35, 0); deck.receiveShadow = true; deck.castShadow = true;
     platform.add(deck);
     const postMat = new THREE.MeshStandardMaterial({ color: 0xfff1d6, roughness: 0.6 });
-    for (const z of [-5, 5]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3.6, 8), postMat); post.position.set(-2.4, 2.5, z); post.castShadow = true; platform.add(post); }
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.16, 12.6), new THREE.MeshStandardMaterial({ map: stripes("#4aa3ff", "#fff6e3", 10, true), roughness: 0.8 }));
-    roof.position.set(-2.4, 4.4, 0); roof.castShadow = true; platform.add(roof);
+    for (const z of [-3.5, 3.5]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3.6, 8), postMat); post.position.set(DECK_X, 2.5, z); post.castShadow = true; platform.add(post); }
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.16, 8.6), new THREE.MeshStandardMaterial({ map: stripes("#4aa3ff", "#fff6e3", 10, true), roughness: 0.8 }));
+    roof.position.set(DECK_X, 4.4, 0); roof.castShadow = true; platform.add(roof);
     const label = new THREE.Mesh(new THREE.PlaneGeometry(5, 1.3), new THREE.MeshBasicMaterial({ map: sign("PUZZLE TRAIN", { bg: "#fff3d6", fg: "#3b2a1a", border: "#4aa3ff", emoji: "🚂" }), transparent: true, side: THREE.DoubleSide }));
-    label.position.set(-2.4, 5.3, 0); label.rotation.y = Math.PI / 2;
+    label.position.set(DECK_X, 5.3, 0); label.rotation.y = Math.PI / 2;
     platform.add(label);
     this.group.add(platform);
 

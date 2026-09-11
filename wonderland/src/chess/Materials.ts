@@ -26,7 +26,22 @@ export function pieceGeometries(pieces: THREE.Group): Record<string, THREE.Buffe
       m.name = name;
       const g = m.geometry;
       if (!g.attributes.uv2 && g.attributes.uv) g.setAttribute("uv2", g.attributes.uv);
+      // gltfpack quantizes positions to uint16 and parks the dequantizing scale + offset on the
+      // mesh node. Callers put this geometry on fresh Meshes at scale 1, so bake that node
+      // transform into float positions here — otherwise every piece is ~14,000 units tall and
+      // the camera sits inside it (back-face culled: an empty board). Normals are untouched:
+      // the transform is a uniform scale plus a translation.
+      if (!g.userData.dequantized) {
+        m.updateMatrix();
+        const src = g.attributes.position;
+        const dst = new THREE.Float32BufferAttribute(src.count * 3, 3);
+        const v = new THREE.Vector3();
+        for (let i = 0; i < src.count; i++) { v.fromBufferAttribute(src, i).applyMatrix4(m.matrix); dst.setXYZ(i, v.x, v.y, v.z); }
+        g.setAttribute("position", dst);
+        g.userData.dequantized = true;
+      }
       g.computeBoundingBox();
+      g.computeBoundingSphere();
       out[m.name] = g;
     }
   });
