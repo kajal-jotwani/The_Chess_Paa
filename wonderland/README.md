@@ -25,9 +25,14 @@ npm run dev        # → http://localhost:5173
 | Physics | `src/world/Kart.ts` | cannon-es raycast vehicle + pawn bowling pins, beach balls, letter blocks and toppling giant pieces. Drive into any attraction to enter it. |
 | Chess | `src/chess/*` | chess.js rules, Stockfish 18 (WASM worker), a 3D board with animated moves, and the **coach**: engine-graded verdicts + motif detection (hanging pieces, forks, missed mates, early queen…) told in ChessPaa's voice. |
 | Modes | `src/modes/*` | Piece Academy (rhymes acted out on the board + try-it), Tactics Coaster (8 themed tracks), Endgame Ferris Wheel (with gondola rides every 3 solves), Puzzle Train (rush: 3 hearts, 5 minutes), Grand Match (5 strength levels), coaster tour, free driving. |
+| Atmosphere | `src/world/Atmosphere.ts`, `src/core/WeatherDetect.ts` | Seven sky domes (dawn, day, dusk, night, cloudy, rain, rainy night) with matching sun, fog, grading, lamp lights, fireflies and rain. Auto-picked from the local clock and, if you allow location, live weather from Open-Meteo; the top-bar pill overrides it. |
 | Puzzles | `src/data/puzzles.json` | Curated from the CC0 [Lichess puzzle database](https://database.lichess.org/#puzzles) by `tools/curate_puzzles.py`; every puzzle replays through chess.js. |
 
-Progress (stars, tickets, best rush) is stored in `localStorage` only. No accounts, no network calls while playing.
+Progress (stars, tickets, best rush) is stored in `localStorage` only. No accounts. The only optional network call is the weather lookup (off unless you grant location).
+
+## Testing
+
+`node tools/shots.mjs <dir>` captures intro/hub/theme/match screenshots with headless Chromium (uses the parent project's Playwright). In the running page, `window.wonderland.tick(seconds)` advances the simulation deterministically; the smoke scripts drive every mode through it. `node tools/verify_content.mjs` and `node tools/verify_puzzles.mjs` replay all lesson beats and puzzles through chess.js.
 
 ## Licences
 three.js (MIT), chess.js (BSD-2), cannon-es (MIT), postprocessing (Zlib), N8AO (MIT), Stockfish (**GPLv3**), Poly Haven assets (CC0), Lichess puzzles (CC0).
